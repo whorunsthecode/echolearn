@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple OCR Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        #log { font-family: monospace; background: #f8f9fa; padding: 15px; border: 1px solid #ddd; max-height: 400px; overflow-y: auto; }
+        input[type="file"] { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Simple OCR Debug</h1>
+    <p>This page tests Tesseract.js v5.x API step by step to identify the exact problem.</p>
+
+    <div class="status info">
+        <strong>Status:</strong> <span id="overall-status">Initializing...</span>
+    </div>
+
+    <button onclick="testStep1()">1️⃣ Load Tesseract.js</button>
+    <button onclick="testStep2()">2️⃣ Create Worker</button>
+    <button onclick="testStep3()">3️⃣ Test OCR</button>
+    <button onclick="testStep4()">4️⃣ Full Test</button>
+    <button onclick="clearLog()">🧹 Clear Log</button>
+
+    <br><br>
+    <input type="file" id="imageFile" accept="image/*" />
+    <button onclick="testWithUserImage()">📸 Test with Your Image</button>
+
+    <h3>📝 Debug Log</h3>
+    <div id="log"></div>
+
+    <!-- Load Tesseract.js from CDN -->
+    <script src="https://unpkg.com/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+    
+    <script>
+        let worker = null;
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.style.margin = '2px 0';
+            entry.style.padding = '4px';
+            entry.style.borderLeft = `3px solid ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#007bff'}`;
+            entry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            // Update overall status
+            const status = document.getElementById('overall-status');
+            if (type === 'error') {
+                status.textContent = 'Error occurred';
+                status.parentElement.className = 'status error';
+            } else if (type === 'success') {
+                status.textContent = 'Test successful';
+                status.parentElement.className = 'status success';
+            } else {
+                status.textContent = 'Testing in progress...';
+                status.parentElement.className = 'status info';
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('overall-status').textContent = 'Ready for testing';
+            document.getElementById('overall-status').parentElement.className = 'status info';
+        }
+
+        async function testStep1() {
+            log('🚀 Step 1: Testing Tesseract.js loading...');
+            
+            try {
+                if (typeof Tesseract === 'undefined') {
+                    log('❌ Tesseract.js not loaded from CDN', 'error');
+                    return false;
+                }
+                
+                log('✅ Tesseract.js loaded successfully');
+                log(`📦 Tesseract version: ${Tesseract.version || 'unknown'}`);
+                log(`🌐 Browser: ${navigator.userAgent}`);
+                log(`🔧 Worker support: ${typeof Worker !== 'undefined'}`);
+                log(`📱 Platform: ${navigator.platform}`);
+                
+                return true;
+            } catch (error) {
+                log(`❌ Step 1 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testStep2() {
+            log('🚀 Step 2: Testing worker creation...');
+            
+            try {
+                if (!(await testStep1())) {
+                    log('❌ Step 1 must pass first', 'error');
+                    return false;
+                }
+                
+                // Clean up existing worker
+                if (worker) {
+                    log('🗑️ Terminating existing worker...');
+                    await worker.terminate();
+                    worker = null;
+                }
+                
+                log('⏳ Creating Tesseract worker with v5.x API...');
+                log('🔧 Using: await Tesseract.createWorker(\'eng\')');
+                
+                // Set a timeout to catch hanging
+                const workerPromise = Tesseract.createWorker('eng', {
+                    logger: (m) => {
+                        log(`📊 Worker: ${m.status} ${m.progress ? '(' + Math.round(m.progress * 100) + '%)' : ''}`);
+                    }
+                });
+                
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Worker creation timeout (30s)')), 30000);
+                });
+                
+                worker = await Promise.race([workerPromise, timeoutPromise]);
+                
+                log('✅ Worker created successfully!', 'success');
+                log(`🔍 Worker object: ${typeof worker}`);
+                log(`🔍 Worker methods: ${Object.getOwnPropertyNames(worker).join(', ')}`);
+                
+                return true;
+            } catch (error) {
+                log(`❌ Step 2 failed: ${error.message}`, 'error');
+                log(`❌ Error stack: ${error.stack}`);
+                return false;
+            }
+        }
+
+        async function testStep3() {
+            log('🚀 Step 3: Testing OCR with sample image...');
+            
+            try {
+                if (!worker) {
+                    if (!(await testStep2())) {
+                        log('❌ Step 2 must pass first', 'error');
+                        return false;
+                    }
+                }
+                
+                log('🎨 Creating test image...');
+                const canvas = document.createElement('canvas');
+                canvas.width = 400;
+                canvas.height = 100;
+                const ctx = canvas.getContext('2d');
+                
+                // Create a simple test image with text
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 400, 100);
+                ctx.fillStyle = 'black';
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText('Hello World OCR Test', 50, 50);
+                
+                log('✅ Test image created');
+                
+                // Convert to blob
+                const blob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, 'image/png');
+                });
+                
+                log('🔍 Running OCR on test image...');
+                const result = await worker.recognize(blob, {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            log(`📊 OCR Progress: ${Math.round(m.progress * 100)}%`);
+                        }
+                    }
+                });
+                
+                log(`✅ OCR completed successfully!`, 'success');
+                log(`📝 Extracted text: "${result.data.text.trim()}"`);
+                log(`📊 Confidence: ${result.data.confidence}%`);
+                
+                return true;
+            } catch (error) {
+                log(`❌ Step 3 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testStep4() {
+            log('🚀 Step 4: Full integration test...');
+            
+            try {
+                // Clean start
+                if (worker) {
+                    await worker.terminate();
+                    worker = null;
+                }
+                
+                log('🔄 Running complete workflow...');
+                
+                // Run all steps in sequence
+                if (await testStep1() && await testStep2() && await testStep3()) {
+                    log('🎉 ALL TESTS PASSED! OCR is working correctly.', 'success');
+                    return true;
+                } else {
+                    log('❌ Some tests failed', 'error');
+                    return false;
+                }
+            } catch (error) {
+                log(`❌ Full test failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testWithUserImage() {
+            const fileInput = document.getElementById('imageFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                log('❌ Please select an image file first', 'error');
+                return;
+            }
+            
+            log(`🚀 Testing with user image: ${file.name}`);
+            
+            try {
+                if (!worker) {
+                    if (!(await testStep2())) {
+                        log('❌ Worker creation failed', 'error');
+                        return;
+                    }
+                }
+                
+                log('🔍 Running OCR on user image...');
+                const result = await worker.recognize(file, {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            log(`📊 OCR Progress: ${Math.round(m.progress * 100)}%`);
+                        }
+                    }
+                });
+                
+                log(`✅ OCR completed on user image!`, 'success');
+                log(`📝 Extracted text (${result.data.text.length} chars):`);
+                log(`"${result.data.text.substring(0, 200)}${result.data.text.length > 200 ? '...' : ''}"`);
+                log(`📊 Confidence: ${result.data.confidence}%`);
+                
+            } catch (error) {
+                log(`❌ User image OCR failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run basic test on load
+        window.addEventListener('load', () => {
+            log('🔍 Simple OCR Debug loaded');
+            log('👋 Click buttons above to test each step');
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', async () => {
+            if (worker) {
+                await worker.terminate();
+            }
+        });
+    </script>
+</body>
+</html> 

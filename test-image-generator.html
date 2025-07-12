@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Generator</title>
+</head>
+<body>
+    <h1>Test Image Generator for OCR</h1>
+    <canvas id="testCanvas" width="800" height="400" style="border: 1px solid black;"></canvas>
+    <br><br>
+    <button onclick="generateImage()">Generate Test Image</button>
+    <button onclick="downloadImage()">Download Test Image</button>
+    
+    <script>
+        const canvas = document.getElementById('testCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function generateImage() {
+            // Clear canvas
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Set text properties
+            ctx.fillStyle = 'black';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'left';
+            
+            // Add test text
+            const testText = [
+                'Welcome to EchoLearn OCR Testing',
+                '',
+                'This is a sample document for testing',
+                'the OCR functionality. The text should',
+                'be extracted and displayed in a',
+                'dyslexia-friendly format.',
+                '',
+                'Key features to test:',
+                '• Text extraction from images',
+                '• Dyslexia-friendly formatting',
+                '• AI-powered summarization',
+                '• Practice question generation',
+                '',
+                'This text contains different fonts,',
+                'sizes, and formatting to test the',
+                'OCR accuracy and robustness.'
+            ];
+            
+            let y = 40;
+            testText.forEach(line => {
+                if (line === '') {
+                    y += 15;
+                } else {
+                    ctx.fillText(line, 30, y);
+                    y += 30;
+                }
+            });
+            
+            // Add some styling
+            ctx.strokeStyle = 'gray';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+        }
+        
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.download = 'test-ocr-image.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Generate initial image
+        generateImage();
+    </script>
+</body>
+</html> 

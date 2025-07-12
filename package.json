@@ -1,0 +1,58 @@
+{
+  "name": "echolearn",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP web application that transforms classroom audio into customizable, dyslexia-friendly study materials",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "nodemon server/index.js",
+    "dev:frontend": "vite",
+    "build": "vite build",
+    "build:frontend": "vite build",
+    "build:backend": "echo 'Backend build complete'",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+    "start": "node server/index.js",
+    "postbuild": "echo 'Build complete'"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.2.1",
+    "bcryptjs": "^2.4.3",
+    "concurrently": "^8.2.2",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.1.5",
+    "express-slow-down": "^2.0.1",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
+    "hpp": "^0.2.3",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.300.0",
+    "mongoose": "^8.0.3",
+    "opencv.js": "^1.2.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-dropzone": "^14.2.3",
+    "styled-components": "^6.1.8",
+    "tesseract.js": "^5.0.4",
+    "winston": "^3.11.0",
+    "xss": "^1.0.14"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "nodemon": "^3.0.2",
+    "vite": "^5.0.8"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

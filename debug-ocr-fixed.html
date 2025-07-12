@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Debug - Multiple Strategies</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #log { font-family: monospace; background: #f8f9fa; padding: 15px; border: 1px solid #ddd; max-height: 400px; overflow-y: auto; }
+        .strategy-section { border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 5px; }
+        .strategy-section h3 { margin-top: 0; }
+        input[type="file"] { margin: 10px 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 OCR Debug - Multiple Strategies</h1>
+    <p>Testing different approaches to fix the Tesseract.js worker initialization timeout.</p>
+
+    <div class="status info">
+        <strong>Status:</strong> <span id="overall-status">Ready to test</span>
+    </div>
+
+    <div class="grid">
+        <div class="strategy-section">
+            <h3>📦 Strategy 1: Different CDN</h3>
+            <button onclick="testStrategy1()">Test jsDelivr CDN</button>
+            <p><small>Try loading from jsDelivr instead of unpkg</small></p>
+        </div>
+
+        <div class="strategy-section">
+            <h3>🔧 Strategy 2: Local Worker</h3>
+            <button onclick="testStrategy2()">Test with Options</button>
+            <p><small>Use specific worker options and paths</small></p>
+        </div>
+
+        <div class="strategy-section">
+            <h3>⏱️ Strategy 3: Incremental Loading</h3>
+            <button onclick="testStrategy3()">Test Step by Step</button>
+            <p><small>Load and initialize in smaller steps</small></p>
+        </div>
+
+        <div class="strategy-section">
+            <h3>🌐 Strategy 4: Network Test</h3>
+            <button onclick="testStrategy4()">Test Network Access</button>
+            <p><small>Check if network requests are working</small></p>
+        </div>
+    </div>
+
+    <div class="strategy-section">
+        <h3>🧪 Manual Test</h3>
+        <input type="file" id="imageFile" accept="image/*" />
+        <button onclick="testWithUserImage()">Test User Image</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <h3>📝 Debug Log</h3>
+    <div id="log"></div>
+
+    <script>
+        let worker = null;
+        let tesseractLoaded = false;
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.style.margin = '2px 0';
+            entry.style.padding = '4px';
+            entry.style.borderLeft = `3px solid ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#007bff'}`;
+            entry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            // Update overall status
+            const status = document.getElementById('overall-status');
+            if (type === 'error') {
+                status.textContent = 'Error occurred';
+                status.parentElement.className = 'status error';
+            } else if (type === 'success') {
+                status.textContent = 'Test successful';
+                status.parentElement.className = 'status success';
+            } else {
+                status.textContent = 'Testing...';
+                status.parentElement.className = 'status info';
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('overall-status').textContent = 'Ready to test';
+            document.getElementById('overall-status').parentElement.className = 'status info';
+        }
+
+        async function loadTesseractFromCDN(cdnUrl) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = cdnUrl;
+                script.onload = () => {
+                    log(`✅ Loaded Tesseract from: ${cdnUrl}`);
+                    resolve();
+                };
+                script.onerror = (error) => {
+                    log(`❌ Failed to load from: ${cdnUrl}`, 'error');
+                    reject(error);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        async function testStrategy1() {
+            log('🚀 Strategy 1: Testing different CDN sources...');
+            
+            try {
+                // Clean up existing scripts
+                const existingScripts = document.querySelectorAll('script[src*="tesseract"]');
+                existingScripts.forEach(script => script.remove());
+                
+                // Clear existing Tesseract object
+                if (typeof Tesseract !== 'undefined') {
+                    delete window.Tesseract;
+                }
+                
+                // Try different CDN sources
+                const cdnOptions = [
+                    'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js',
+                    'https://unpkg.com/tesseract.js@5.0.5/dist/tesseract.min.js',
+                    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.5/tesseract.min.js'
+                ];
+                
+                for (const cdnUrl of cdnOptions) {
+                    try {
+                        log(`🔄 Trying CDN: ${cdnUrl}`);
+                        await loadTesseractFromCDN(cdnUrl);
+                        
+                        if (typeof Tesseract !== 'undefined') {
+                            log(`✅ Successfully loaded Tesseract from: ${cdnUrl}`, 'success');
+                            tesseractLoaded = true;
+                            
+                            // Try to create worker immediately
+                            log('⏳ Creating worker with 10s timeout...');
+                            const workerPromise = Tesseract.createWorker('eng');
+                            const timeoutPromise = new Promise((_, reject) => {
+                                setTimeout(() => reject(new Error('Worker timeout (10s)')), 10000);
+                            });
+                            
+                            worker = await Promise.race([workerPromise, timeoutPromise]);
+                            log('✅ Worker created successfully!', 'success');
+                            return true;
+                        }
+                    } catch (error) {
+                        log(`❌ CDN failed: ${error.message}`);
+                        continue;
+                    }
+                }
+                
+                log('❌ All CDN options failed', 'error');
+                return false;
+            } catch (error) {
+                log(`❌ Strategy 1 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testStrategy2() {
+            log('🚀 Strategy 2: Testing with specific worker options...');
+            
+            try {
+                if (!tesseractLoaded) {
+                    log('❌ Tesseract not loaded, try Strategy 1 first', 'error');
+                    return false;
+                }
+                
+                // Clean up existing worker
+                if (worker) {
+                    await worker.terminate();
+                    worker = null;
+                }
+                
+                log('🔧 Creating worker with specific options...');
+                
+                // Try with specific options
+                const workerOptions = {
+                    logger: (m) => {
+                        log(`📊 Worker: ${m.status} ${m.progress ? '(' + Math.round(m.progress * 100) + '%)' : ''}`);
+                    },
+                    errorHandler: (err) => {
+                        log(`❌ Worker error: ${err.message}`, 'error');
+                    }
+                };
+                
+                const workerPromise = Tesseract.createWorker('eng', workerOptions);
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Worker timeout (15s)')), 15000);
+                });
+                
+                worker = await Promise.race([workerPromise, timeoutPromise]);
+                log('✅ Worker created with options!', 'success');
+                return true;
+            } catch (error) {
+                log(`❌ Strategy 2 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testStrategy3() {
+            log('🚀 Strategy 3: Testing incremental loading...');
+            
+            try {
+                if (!tesseractLoaded) {
+                    log('❌ Tesseract not loaded, try Strategy 1 first', 'error');
+                    return false;
+                }
+                
+                // Clean up existing worker
+                if (worker) {
+                    await worker.terminate();
+                    worker = null;
+                }
+                
+                log('🔄 Step 1: Check Tesseract object...');
+                if (typeof Tesseract === 'undefined') {
+                    log('❌ Tesseract object not found', 'error');
+                    return false;
+                }
+                log('✅ Tesseract object available');
+                
+                log('🔄 Step 2: Check createWorker method...');
+                if (typeof Tesseract.createWorker !== 'function') {
+                    log('❌ createWorker method not found', 'error');
+                    return false;
+                }
+                log('✅ createWorker method available');
+                
+                log('🔄 Step 3: Check Web Worker support...');
+                if (typeof Worker === 'undefined') {
+                    log('❌ Web Workers not supported', 'error');
+                    return false;
+                }
+                log('✅ Web Workers supported');
+                
+                log('🔄 Step 4: Create worker with very short timeout...');
+                const workerPromise = Tesseract.createWorker('eng', {
+                    logger: (m) => log(`📊 ${m.status}: ${m.progress || 0}`)
+                });
+                
+                // Very short timeout to see immediate response
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Quick timeout (5s)')), 5000);
+                });
+                
+                worker = await Promise.race([workerPromise, timeoutPromise]);
+                log('✅ Worker created incrementally!', 'success');
+                return true;
+            } catch (error) {
+                log(`❌ Strategy 3 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testStrategy4() {
+            log('🚀 Strategy 4: Testing network access...');
+            
+            try {
+                log('🔄 Testing basic network connectivity...');
+                
+                // Test basic fetch
+                const response = await fetch('https://httpbin.org/get');
+                if (!response.ok) {
+                    log('❌ Basic network test failed', 'error');
+                    return false;
+                }
+                log('✅ Basic network connectivity working');
+                
+                // Test Tesseract CDN access
+                log('🔄 Testing Tesseract CDN access...');
+                const cdnResponse = await fetch('https://unpkg.com/tesseract.js@5.0.5/dist/tesseract.min.js');
+                if (!cdnResponse.ok) {
+                    log('❌ Cannot access Tesseract CDN', 'error');
+                    return false;
+                }
+                log('✅ Tesseract CDN accessible');
+                
+                // Test worker files
+                log('🔄 Testing worker file access...');
+                const workerResponse = await fetch('https://unpkg.com/tesseract.js@5.0.5/dist/worker.min.js');
+                if (!workerResponse.ok) {
+                    log('❌ Cannot access worker files', 'error');
+                    return false;
+                }
+                log('✅ Worker files accessible');
+                
+                log('✅ All network tests passed!', 'success');
+                return true;
+            } catch (error) {
+                log(`❌ Strategy 4 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testWithUserImage() {
+            const fileInput = document.getElementById('imageFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                log('❌ Please select an image file first', 'error');
+                return;
+            }
+            
+            log(`🚀 Testing with user image: ${file.name}`);
+            
+            try {
+                if (!worker) {
+                    log('❌ No worker available - try one of the strategies first', 'error');
+                    return;
+                }
+                
+                log('🔍 Running OCR on user image...');
+                const result = await worker.recognize(file, {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            log(`📊 OCR Progress: ${Math.round(m.progress * 100)}%`);
+                        }
+                    }
+                });
+                
+                log(`✅ OCR completed on user image!`, 'success');
+                log(`📝 Extracted text (${result.data.text.length} chars):`);
+                log(`"${result.data.text.substring(0, 200)}${result.data.text.length > 200 ? '...' : ''}"`);
+                log(`📊 Confidence: ${result.data.confidence}%`);
+                
+            } catch (error) {
+                log(`❌ User image OCR failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            log('🔍 OCR Debug - Multiple Strategies loaded');
+            log('📋 Choose a strategy to test:');
+            log('1️⃣ Strategy 1: Different CDN sources');
+            log('2️⃣ Strategy 2: Worker with specific options');
+            log('3️⃣ Strategy 3: Incremental loading');
+            log('4️⃣ Strategy 4: Network connectivity test');
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', async () => {
+            if (worker) {
+                await worker.terminate();
+            }
+        });
+    </script>
+</body>
+</html> 
