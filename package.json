@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
     "start": "node server/index.js",
-    "postbuild": "echo 'Build complete'"
+    "postbuild": "echo 'Build complete'",
+    "vercel-build": "npm run build"
   },
   "dependencies": {
     "@google/generative-ai": "^0.2.1",
