@@ -7,14 +7,14 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "nodemon server/index.js",
     "dev:frontend": "vite",
-    "build": "vite build",
+    "build": "echo 'Backend build complete - no build step needed'",
     "build:frontend": "vite build",
     "build:backend": "echo 'Backend build complete'",
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
     "start": "node server/index.js",
     "postbuild": "echo 'Build complete'",
-    "vercel-build": "npm run build"
+    "vercel-build": "npm run build:frontend"
   },
   "dependencies": {
     "@google/generative-ai": "^0.2.1",
