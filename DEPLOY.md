@@ -69,6 +69,7 @@ For optimal performance with your Railway + Vercel setup:
 1. Create a new repository on GitHub called "echolearn"
 2. Push your code:
    ```bash
+   
    git init
    git add .
    git commit -m "Initial commit"
