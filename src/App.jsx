@@ -212,45 +212,179 @@ const Header = styled.header`
 const ProgressBar = styled.div`
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
   margin-bottom: 30px;
   padding: 20px;
   background: ${props => props.theme.cardBackground};
   border-radius: 12px;
   border: 1px solid ${props => props.theme.borderColor};
+  position: relative;
+  
+  .progress-line {
+    position: absolute;
+    top: 50%;
+    left: 15%;
+    right: 15%;
+    height: 3px;
+    background: ${props => props.theme.borderColor};
+    z-index: 1;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background: ${props => props.theme.primaryColor};
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
   
   .step {
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
-    border-radius: 20px;
+    flex: 1;
+    position: relative;
+    z-index: 2;
+    
+    .step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 16px;
+      transition: all 0.3s ease;
+      border: 3px solid;
+    }
+    
+    .step-label {
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      margin-top: 4px;
+    }
+    
+    &.active .step-circle {
+      background: ${props => props.theme.primaryColor};
+      color: white;
+      border-color: ${props => props.theme.primaryColor};
+      box-shadow: 0 0 0 4px ${props => props.theme.primaryColor}20;
+    }
+    
+    &.completed .step-circle {
+      background: ${props => props.theme.secondaryColor};
+      color: white;
+      border-color: ${props => props.theme.secondaryColor};
+    }
+    
+    &.pending .step-circle {
+      background: ${props => props.theme.backgroundColor};
+      color: ${props => props.theme.textColor};
+      border-color: ${props => props.theme.borderColor};
+    }
+    
+    &.active .step-label {
+      color: ${props => props.theme.primaryColor};
+      font-weight: 700;
+    }
+    
+    &.completed .step-label {
+      color: ${props => props.theme.secondaryColor};
+    }
+    
+    &.pending .step-label {
+      color: ${props => props.theme.textColor};
+      opacity: 0.6;
+    }
+  }
+`
+
+const ColorPreview = styled.div`
+  background: ${props => props.$backgroundColor};
+  color: ${props => props.$textColor};
+  border: 1px solid ${props => props.$borderColor};
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  
+  .preview-title {
+    font-weight: 600;
+    color: ${props => props.$primaryColor};
+    margin-bottom: 4px;
+  }
+  
+  .preview-text {
+    line-height: 1.5;
+  }
+`
+
+const UploadProgress = styled.div`
+  margin: 16px 0;
+  
+  .upload-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
     font-size: 14px;
     font-weight: 600;
     
-    &.active {
-      background: ${props => props.theme.primaryColor};
-      color: white;
-    }
-    
-    &.completed {
-      background: ${props => props.theme.secondaryColor};
-      color: white;
-    }
-    
-    &.pending {
-      background: ${props => props.theme.backgroundColor};
-      color: ${props => props.theme.textColor};
-      border: 1px solid ${props => props.theme.borderColor};
+    .status-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      
+      &.success {
+        background: ${props => props.theme.secondaryColor};
+        color: white;
+      }
+      
+      &.loading {
+        background: ${props => props.theme.primaryColor};
+        color: white;
+        animation: pulse 1.5s infinite;
+      }
     }
   }
   
-  .arrow {
-    color: ${props => props.theme.primaryColor};
-    background: ${props => props.theme.backgroundColor};
-    padding: 8px;
-    border-radius: 50%;
+  .file-preview {
+    background: ${props => props.theme.cardBackground};
     border: 1px solid ${props => props.theme.borderColor};
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    .file-icon {
+      color: ${props => props.theme.primaryColor};
+    }
+    
+    .file-info {
+      flex: 1;
+      
+      .file-name {
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+      
+      .file-size {
+        font-size: 12px;
+        opacity: 0.7;
+      }
+    }
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 `
 
@@ -1113,8 +1247,6 @@ const SpellingFeedback = styled.div`
 
 function App() {
   // State management
-  const [isRecording, setIsRecording] = useState(false)
-  const [isPreparingRecording, setIsPreparingRecording] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [audioUrl, setAudioUrl] = useState('')
@@ -1126,7 +1258,9 @@ function App() {
   const [isProcessingOCR, setIsProcessingOCR] = useState(false)
   const [ocrProgress, setOcrProgress] = useState(0)
   const [uploadedFile, setUploadedFile] = useState(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [ocrError, setOcrError] = useState('')
+  const [previewMode, setPreviewMode] = useState(false)
   
   // Spelling Quiz state
   const [showSpellingQuiz, setShowSpellingQuiz] = useState(false)
@@ -1148,7 +1282,7 @@ function App() {
   const [backendStatus, setBackendStatus] = useState('checking')
   
   // Progress tracking
-  const [currentStep, setCurrentStep] = useState(1) // 1: Record, 2: Transcribe, 3: Study
+  const [currentStep, setCurrentStep] = useState(1) // 1: Add Text, 2: Process Text, 3: Study Materials
   
   // Reading focus tool
   const [focusedSentenceIndex, setFocusedSentenceIndex] = useState(-1)
@@ -1166,8 +1300,6 @@ function App() {
   const [textSource, setTextSource] = useState('upload') // 'upload' or 'paste'
   
   // Refs
-  const mediaRecorderRef = useRef(null)
-  const audioChunksRef = useRef([])
   const audioRef = useRef(null)
 
   // Check backend status on component mount
@@ -1274,58 +1406,9 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
     'water', 'cycle', 'cloud', 'vapor', 'ocean', 'river', 'earth', 'solar', 'heat', 'drop'
   ]
 
-  // Audio recording functions
-  const startRecording = async () => {
-    try {
-      setIsPreparingRecording(true)
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-      
-      // Start real-time speech transcription
-      speechService.startRealTimeTranscription(
-        (transcriptData) => {
-          // Update transcript in real-time
-          setTranscript(transcriptData.complete)
-        },
-        (error) => {
-          console.error('Speech recognition error:', error)
-          // Fallback to demo on error
-          setTranscript(demoTranscript)
-        }
-      )
-      
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data)
-      }
-      
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
-        const url = URL.createObjectURL(audioBlob)
-        setAudioUrl(url)
-        
-        // Stop speech recognition
-        speechService.stopTranscription()
-      }
-      
-      mediaRecorder.start()
-      setIsRecording(true)
-      setIsPreparingRecording(false)
-    } catch (error) {
-      console.error('Error accessing microphone:', error)
-      alert('Unable to access microphone. Please check permissions.')
-      setIsPreparingRecording(false)
-    }
-  }
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
-      setIsRecording(false)
-    }
+  // File processing completed handler
+  const handleProcessingComplete = () => {
+    setCurrentStep(2) // Move to process text step
   }
 
   const handleFileUpload = async (files) => {
@@ -1838,14 +1921,6 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
 
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
-          case 'r':
-            event.preventDefault()
-            if (!isRecording) {
-              startRecording()
-            } else {
-              stopRecording()
-            }
-            break
           case 'p':
             event.preventDefault()
             if (audioUrl) {
@@ -1869,6 +1944,11 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
             if (transcript) {
               (isSpeaking && currentlyReading === 'transcript') ? stopSpeaking() : speakText(transcript, 'transcript')
             }
+            break
+          case 'u':
+            event.preventDefault()
+            // Focus on file upload area
+            document.querySelector('input[type="file"]')?.click()
             break
           default:
             break
@@ -1905,7 +1985,7 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
 
          window.addEventListener('keydown', handleKeyDown)
      return () => window.removeEventListener('keydown', handleKeyDown)
-   }, [isRecording, audioUrl, transcript, isSpeaking, currentlyReading, isReadingMode])
+   }, [audioUrl, transcript, isSpeaking, currentlyReading, isReadingMode])
 
   // Load user preferences on component mount
   useEffect(() => {
@@ -1984,15 +2064,23 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
         </FileUploadZone>
 
         {uploadedFile && (
-          <FileInfo>
-            <div className="file-icon">
-              <FileText size={24} />
+          <UploadProgress>
+            <div className="upload-status">
+              <div className={`status-icon ${isProcessingOCR ? 'loading' : 'success'}`}>
+                {isProcessingOCR ? '⏳' : '✓'}
+              </div>
+              {isProcessingOCR ? 'Processing...' : 'File ready'}
             </div>
-            <div className="file-details">
-              <div className="file-name">{uploadedFile.name}</div>
-              <div className="file-size">{ocrService.formatFileSize(uploadedFile.size)}</div>
+            <div className="file-preview">
+              <div className="file-icon">
+                <FileText size={24} />
+              </div>
+              <div className="file-info">
+                <div className="file-name">{uploadedFile.name}</div>
+                <div className="file-size">{ocrService.formatFileSize(uploadedFile.size)}</div>
+              </div>
             </div>
-          </FileInfo>
+          </UploadProgress>
         )}
 
         {isProcessingOCR && (
@@ -2067,21 +2155,31 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
           <p>Transform documents and images into dyslexia-friendly study materials</p>
         </Header>
 
-        {/* Progress Indicator */}
+        {/* Enhanced Progress Indicator */}
         <ProgressBar>
+          <div className="progress-line">
+            <div 
+              className="progress-fill" 
+              style={{ width: `${((currentStep - 1) / 2) * 100}%` }}
+            />
+          </div>
           <div className={`step ${currentStep >= 1 ? 'completed' : currentStep === 1 ? 'active' : 'pending'}`}>
-            <FileImage size={16} />
-            1. Add Text
+            <div className="step-circle">
+              {currentStep > 1 ? '✓' : '1'}
+            </div>
+            <div className="step-label">📄 Add Text</div>
           </div>
-          <ArrowRight size={16} className="arrow" />
           <div className={`step ${currentStep >= 2 ? 'completed' : currentStep === 2 ? 'active' : 'pending'}`}>
-            <FileText size={16} />
-            2. Process Text
+            <div className="step-circle">
+              {currentStep > 2 ? '✓' : '2'}
+            </div>
+            <div className="step-label">⚡ Process Text</div>
           </div>
-          <ArrowRight size={16} className="arrow" />
           <div className={`step ${currentStep >= 3 ? 'completed' : currentStep === 3 ? 'active' : 'pending'}`}>
-            <Brain size={16} />
-            3. Study Materials
+            <div className="step-circle">
+              {currentStep > 3 ? '✓' : '3'}
+            </div>
+            <div className="step-label">🧠 Study Materials</div>
           </div>
         </ProgressBar>
 
@@ -2115,9 +2213,7 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
               
               <InlineHelp>
                 <Keyboard size={16} className="help-icon" />
-                Paste text directly from your clipboard to use with all study features.
-                <br />
-                Perfect for text you've already copied from documents or websites.
+                📋 Paste text • 🧠 Generate AI summaries • ✨ Create quizzes
               </InlineHelp>
               
               <div style={{ marginBottom: '16px' }}>
@@ -2490,15 +2586,28 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
 
               <ControlGroup>
                 <label>Color & Contrast</label>
-                <Select 
-                  value={colorScheme} 
-                  onChange={(e) => setColorScheme(e.target.value)}
-                  aria-label="Select color scheme for better readability"
-                >
+                <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>
                   {Object.entries(colorSchemes).map(([key, scheme]) => (
-                    <option key={key} value={key}>{scheme.name}</option>
+                    <ColorPreview
+                      key={key}
+                      $backgroundColor={scheme.backgroundColor}
+                      $textColor={scheme.textColor}
+                      $borderColor={colorScheme === key ? scheme.primaryColor : scheme.borderColor}
+                      $primaryColor={scheme.primaryColor}
+                      onClick={() => setColorScheme(key)}
+                      style={{ 
+                        cursor: 'pointer',
+                        borderWidth: colorScheme === key ? '2px' : '1px',
+                        transform: colorScheme === key ? 'scale(1.02)' : 'scale(1)'
+                      }}
+                    >
+                      <div className="preview-title">{scheme.name}</div>
+                      <div className="preview-text">
+                        Sample text with improved readability
+                      </div>
+                    </ColorPreview>
                   ))}
-                </Select>
+                </div>
               </ControlGroup>
 
               <ControlGroup>
@@ -2515,7 +2624,9 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
             </Card>
 
             <Card>
-              <h3 style={{ marginBottom: '16px', color: theme.primaryColor }}>AI Status</h3>
+              <h3 style={{ marginBottom: '16px', color: theme.primaryColor }}>
+                🤖 AI Status
+              </h3>
               <StatusBadge 
                 $status={backendStatus === 'connected' ? 'connected' : backendStatus === 'checking' ? 'checking' : 'demo'}
                 style={{ marginBottom: '16px' }}
@@ -2523,30 +2634,48 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
                 <span className="status-icon">
                   {backendStatus === 'connected' ? '✅' : backendStatus === 'checking' ? '🔄' : '⚠️'}
                 </span>
-                {backendStatus === 'connected' ? 'Secure Backend Connected' : 
-                 backendStatus === 'checking' ? 'Checking Backend...' : 
-                 'Demo Mode (Backend Disconnected)'}
+                {backendStatus === 'connected' ? 'Connected' : 
+                 backendStatus === 'checking' ? 'Checking...' : 
+                 'Demo Mode'}
               </StatusBadge>
               
-              <h3 style={{ marginBottom: '16px', color: theme.primaryColor }}>Accessibility Features</h3>
-              <ul style={{ listStyle: 'none', fontSize: '14px', lineHeight: '1.6' }}>
-                <li style={{ marginBottom: '8px' }}>📄 OCR text extraction from images and PDFs</li>
-                <li style={{ marginBottom: '8px' }}>🖼️ Drag-and-drop file upload interface</li>
-                <li style={{ marginBottom: '8px' }}>🔍 Advanced image preprocessing for better OCR</li>
-                <li style={{ marginBottom: '8px' }}>📊 Real-time progress feedback during extraction</li>
-                <li style={{ marginBottom: '8px' }}>📖 Text broken into readable paragraphs</li>
-                <li style={{ marginBottom: '8px' }}>🔊 Text-to-speech for all content</li>
-                <li style={{ marginBottom: '8px' }}>🎨 5 dyslexia-friendly color schemes</li>
-                <li style={{ marginBottom: '8px' }}>📏 Optimal line length (45-65 characters)</li>
-                <li style={{ marginBottom: '8px' }}>⚙️ Customizable fonts, sizes, and spacing</li>
-                <li style={{ marginBottom: '8px' }}>💾 Save preferences between sessions</li>
-                <li style={{ marginBottom: '8px' }}>📋 Progress tracking through workflow</li>
-                <li style={{ marginBottom: '8px' }}>⌨️ Full keyboard navigation support</li>
-                <li style={{ marginBottom: '8px' }}>🧠 Enhanced quiz with explanations</li>
-                <li style={{ marginBottom: '8px' }}>🎯 Large, clickable answer buttons</li>
-                <li style={{ marginBottom: '8px' }}>🔵 Clear button hierarchy (Primary/Secondary/Tertiary)</li>
-                <li style={{ marginBottom: '8px' }}>🏷️ Status badges (not fake buttons)</li>
-              </ul>
+              <div style={{ display: 'grid', gap: '12px', fontSize: '13px' }}>
+                <details style={{ cursor: 'pointer' }}>
+                  <summary style={{ fontWeight: '600', color: theme.primaryColor, marginBottom: '8px' }}>
+                    📱 Core Features
+                  </summary>
+                  <div style={{ paddingLeft: '16px', opacity: 0.9 }}>
+                    • OCR text extraction<br/>
+                    • AI summaries & quizzes<br/>
+                    • Text-to-speech reading<br/>
+                    • Spelling practice
+                  </div>
+                </details>
+                
+                <details style={{ cursor: 'pointer' }}>
+                  <summary style={{ fontWeight: '600', color: theme.primaryColor, marginBottom: '8px' }}>
+                    ♿ Accessibility
+                  </summary>
+                  <div style={{ paddingLeft: '16px', opacity: 0.9 }}>
+                    • 5 dyslexia-friendly themes<br/>
+                    • Customizable fonts & spacing<br/>
+                    • Keyboard navigation<br/>
+                    • Reading focus mode
+                  </div>
+                </details>
+                
+                <details style={{ cursor: 'pointer' }}>
+                  <summary style={{ fontWeight: '600', color: theme.primaryColor, marginBottom: '8px' }}>
+                    📊 Progress & Feedback
+                  </summary>
+                  <div style={{ paddingLeft: '16px', opacity: 0.9 }}>
+                    • Real-time upload progress<br/>
+                    • Step-by-step workflow<br/>
+                    • Quiz scoring & explanations<br/>
+                    • Saved preferences
+                  </div>
+                </details>
+              </div>
             </Card>
 
             <Card>
@@ -2555,7 +2684,7 @@ Finally, the water collects in bodies of water and the cycle begins again. This 
                 Keyboard Shortcuts
               </h3>
               <ul style={{ listStyle: 'none', fontSize: '13px', lineHeight: '1.5' }}>
-                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + R</strong> - Start/Stop Recording</li>
+                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + U</strong> - Upload Files</li>
                 <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + P</strong> - Play/Pause Audio</li>
                 <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + T</strong> - Read Text Aloud</li>
                 <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + S</strong> - Generate Summary</li>
