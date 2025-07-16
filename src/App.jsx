@@ -1655,74 +1655,47 @@ function App() {
         role="banner"
         aria-label="EchoLearn application header"
       >
-        {/* Desktop Header Layout (768px+) */}
-        <div className="header-content hidden md:flex">
-          <div className="flex items-center space-x-4">
-            {/* EchoLearn Logo */}
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 shadow-md">
-                <Eye className="w-6 h-6 text-white" />
-              </div>
-              <h1 className="logo">EchoLearn</h1>
-            </div>
-            <p className="subtitle hidden lg:block">
-              Transform documents into dyslexia-friendly study materials
-            </p>
-          </div>
+        {/* Single Header Layout for All Screen Sizes */}
+        <div className="flex items-center justify-between w-full px-4 py-3 md:px-6">
+          {/* Left: EchoLearn Logo + App Name */}
           <div className="flex items-center space-x-3">
-            <button
-              className="keyboard-btn"
-              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
-            >
-              <Keyboard className="w-4 h-4" />
-              <span>Keyboard Shortcuts</span>
-            </button>
-            <button
-              className="keyboard-btn"
-              onClick={() => setShowReadingPreferences(!showReadingPreferences)}
-              title="Reading Preferences"
-              aria-label="Open reading preferences"
-            >
-              <Settings className="w-4 h-4" />
-              <span>Settings</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Header Layout (<768px) */}
-        <div className="flex md:hidden items-center justify-between w-full px-4 py-3">
-          {/* Left: Shortcut Keys Button */}
-          <div className="flex-1 flex justify-start">
-            <button
-              className="keyboard-btn text-sm"
-              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
-              aria-label="Show keyboard shortcuts"
-            >
-              <Keyboard className="w-4 h-4" />
-              <span>Shortcut Keys</span>
-            </button>
-          </div>
-
-          {/* Center: EchoLearn Logo */}
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 shadow-md">
-                <Eye className="w-5 h-5 text-white" />
-              </div>
-              <h1 className="text-lg font-bold" style={{ color: theme.accent }}>EchoLearn</h1>
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 shadow-md">
+              <Eye className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold" style={{ color: theme.accent }}>EchoLearn</h1>
+              <p className="text-xs text-gray-500 hidden sm:block">
+                Transform documents into dyslexia-friendly study materials
+              </p>
             </div>
           </div>
 
-          {/* Right: Settings Icon */}
-          <div className="flex-1 flex justify-end">
+          {/* Right: Icon Buttons with Tooltips */}
+          <div className="flex items-center" style={{ gap: '16px' }}>
             <button
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+              title="Keyboard Shortcuts"
+              aria-label="Open keyboard shortcuts"
+              style={{ 
+                backgroundColor: 'transparent',
+                color: theme.accent
+              }}
+            >
+              <Keyboard className="w-5 h-5" />
+            </button>
+            
+            <button
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               onClick={() => setShowReadingPreferences(!showReadingPreferences)}
               title="Reading Preferences"
               aria-label="Open reading preferences"
-              style={{ backgroundColor: 'transparent' }}
+              style={{ 
+                backgroundColor: 'transparent',
+                color: theme.accent
+              }}
             >
-              <Settings className="w-5 h-5" style={{ color: theme.accent }} />
+              <Settings className="w-5 h-5" />
             </button>
           </div>
         </div>
