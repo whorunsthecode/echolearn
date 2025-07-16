@@ -7,6 +7,7 @@ This guide will help you set up and run the secure EchoLearn application with al
 - Node.js (version 16 or higher)
 - MongoDB (local installation or MongoDB Atlas)
 - Git
+- Google Gemini API Key (optional, falls back to demo data)
 
 ## Installation
 
@@ -34,7 +35,7 @@ This guide will help you set up and run the secure EchoLearn application with al
    # Frontend Configuration
    FRONTEND_URL=http://localhost:5173
 
-   # External API Keys (replace with your actual keys)
+   # External API Keys (Get your key from: https://makersuite.google.com/app/apikey)
    GEMINI_API_KEY=your-actual-gemini-api-key-here
 
    # Security Configuration
@@ -49,7 +50,14 @@ This guide will help you set up and run the secure EchoLearn application with al
    ERROR_LOG_FILE=logs/error.log
    ```
 
-3. **Start MongoDB:**
+3. **Get a Google Gemini API Key (Optional):**
+   - Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Sign in with your Google account
+   - Click "Create API key"
+   - Copy the key and add it to your `.env` file as `GEMINI_API_KEY`
+   - **Note:** Without an API key, the app will use demo data for AI features
+
+4. **Start MongoDB:**
    ```bash
    # If using local MongoDB
    mongod
@@ -98,7 +106,13 @@ npm start
 2. **Check frontend:**
    Visit http://localhost:5173 in your browser
 
-3. **Check logs:**
+3. **Check AI functionality:**
+   - Upload a document or paste text
+   - Click "Generate AI Summary" 
+   - If you see "✅ Summary generated successfully via direct API" in console, AI is working
+   - If you see "📋 Falling back to demo data", you need to set up the Gemini API key
+
+4. **Check logs:**
    ```bash
    tail -f logs/combined.log
    ```
@@ -141,11 +155,10 @@ The system supports three user roles:
 - `GET /api/auth/profile` - Get user profile
 - `PUT /api/auth/profile` - Update user profile
 
-### AI Services (Authenticated)
+### AI Services (No Authentication Required in Demo Mode)
 - `POST /api/ai/generate-summary` - Generate content summary
 - `POST /api/ai/generate-questions` - Generate quiz questions
-- `POST /api/ai/define-word` - Get word definitions
-- `GET /api/ai/usage-stats` - Get usage statistics
+- `GET /api/ai/debug-status` - Check API key status
 
 ### Admin (Admin Role Required)
 - `GET /api/admin/users` - List all users
@@ -164,9 +177,16 @@ The system supports three user roles:
 | `JWT_SECRET` | JWT signing secret (MUST be secure) | `your-256-bit-secret` |
 | `JWT_EXPIRES_IN` | Token expiration time | `7d` |
 | `FRONTEND_URL` | Frontend URL for CORS | `http://localhost:5173` |
-| `GEMINI_API_KEY` | Google Gemini API key | `your-api-key` |
+| `GEMINI_API_KEY` | Google Gemini API key (optional) | `your-api-key` |
 
 ## Troubleshooting
+
+### AI Features Not Working
+If you're seeing demo data instead of real AI responses:
+1. **Check API Key:** Ensure `GEMINI_API_KEY` is set in your `.env` file
+2. **Get API Key:** Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to get a free key
+3. **Check Console:** Look for API error messages in browser developer tools
+4. **Verify Backend:** Check `curl http://localhost:5001/api/ai/debug-status`
 
 ### Port Already in Use
 If port 5001 is in use, change the `PORT` in your `.env` file and update the frontend:
@@ -183,10 +203,6 @@ For production, generate a secure JWT secret:
 ```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
-
-### API Key Issues
-- Ensure `GEMINI_API_KEY` is set in `.env`
-- The app will fall back to demo data if API keys are missing
 
 ## Security Best Practices
 
@@ -219,6 +235,7 @@ For production deployment:
    - Use strong, unique `JWT_SECRET`
    - Configure proper `MONGODB_URI`
    - Set production `FRONTEND_URL`
+   - Add your `GEMINI_API_KEY`
 
 2. **Security Headers:**
    - The app includes Helmet.js for security headers
@@ -230,11 +247,22 @@ For production deployment:
    - Configure SSL certificates
    - Enable HSTS headers
 
+## Demo Mode
+
+EchoLearn includes comprehensive demo data that works without any API keys:
+- **OCR Text Extraction:** Works with Tesseract.js (no API required)
+- **AI Summary Generation:** Falls back to educational demo summaries
+- **Quiz Generation:** Uses pre-built educational quiz questions
+- **Text-to-Speech:** Uses browser's built-in Web Speech API
+
+This ensures the application is fully functional even without external API keys!
+
 ## Support
 
 - Check the `SECURITY.md` file for detailed security information
 - Review logs in the `logs/` directory
 - Check MongoDB connection and API key configuration
+- For Gemini API issues, visit [Google AI Studio](https://makersuite.google.com/app/apikey)
 
 ## License
 

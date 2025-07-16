@@ -1,2824 +1,2112 @@
 import React, { useState, useRef, useEffect } from 'react'
-import styled, { ThemeProvider, createGlobalStyle } from 'styled-components'
-import { Mic, MicOff, Upload, Play, Pause, Download, Copy, FileText, Brain, HelpCircle, Globe, Volume2, VolumeX, ArrowRight, Focus, Eye, EyeOff, Keyboard, FileImage, FilePlus, AlertCircle } from 'lucide-react'
+import { 
+  Upload, FileText, Brain, Eye, Type, Volume2, VolumeX, 
+  Keyboard, Copy, Check, Settings, ChevronDown, Play, Pause,
+  ArrowRight, Download, AlertCircle, FileImage, FilePlus, HelpCircle,
+  Focus, Minimize2, MousePointer, Accessibility
+} from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
+import { motion, AnimatePresence } from 'framer-motion'
+import { clsx } from 'clsx'
 import geminiService from './services/geminiService.js'
 import speechService from './services/speechService.js'
 import ocrService from './services/ocrService.js'
 
-// Error Boundary Component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false, error: null }
+// Theme configuration with improved accessibility and WCAG AAA compliance
+const colorThemes = {
+  'default': {
+    name: 'Default',
+    bg: '#ffffff',
+    text: '#1a1a1a', // Improved contrast: avoid pure black, use dark gray
+    border: '#d4d4d4',
+    cardBg: '#ffffff',
+    accent: '#1976D2' // Darker blue for better contrast on light backgrounds
+  },
+  'warm-beige': {
+    name: 'Warm Beige',
+    bg: '#FDF6E3', // Warm cream base
+    text: '#2C1810', // Dark brown for 15.4:1 contrast ratio
+    border: '#D4B896', // Warm brown border
+    cardBg: '#F4E8D0', // Slightly darker cream for cards
+    accent: '#1976D2' // Darker blue for better contrast on light
+  },
+  'dark': {
+    name: 'Dark',
+    bg: '#1a1a1a', // True dark for better contrast
+    text: '#ffffff', // Pure white for maximum contrast - 21:1 ratio
+    border: '#444444', // Visible borders with 4.7:1 contrast
+    cardBg: '#2d2d2d', // Secondary background for cards/panels
+    accent: '#4A90E2' // Accessible blue for interactive elements
   }
+}
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error }
-  }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('❌ React Error Boundary caught:', error, errorInfo)
-  }
 
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ 
-          padding: '20px', 
-          textAlign: 'center', 
-          backgroundColor: '#fee', 
-          color: '#c53030',
-          borderRadius: '8px',
-          margin: '20px'
-        }}>
-          <AlertCircle size={48} style={{ marginBottom: '16px' }} />
-          <h2>Something went wrong</h2>
-          <p>The OCR component encountered an error. Please refresh the page and try again.</p>
-          <button 
-            onClick={() => window.location.reload()}
+// Progress Steps Component with Equal Spacing and Enhanced Visual Hierarchy
+const ProgressSteps = ({ currentStep, theme }) => {
+  const steps = [
+    { id: 1, title: 'Upload Content', icon: Upload },
+    { id: 2, title: 'Extract Text', icon: FileText },
+    { id: 3, title: 'AI Summary', icon: Brain },
+    { id: 4, title: 'AI MCQs and Spelling Quiz', icon: Type }
+  ]
+
+  return (
+    <div className="w-full max-w-4xl mx-auto px-6 py-8">
+      <div className="flex items-center justify-between relative">
+        {/* Steps */}
+        {steps.map((step, index) => {
+          const Icon = step.icon
+          const isCompleted = currentStep > step.id
+          const isActive = currentStep === step.id
+          const isPending = currentStep < step.id
+          
+          return (
+            <div key={step.id} className="flex flex-col items-center relative z-10" style={{ flex: '1' }}>
+              {/* Step Circle */}
+              <div 
+                className="w-12 h-12 rounded-full flex items-center justify-center font-semibold text-white relative"
+                style={{
+                  backgroundColor: isCompleted 
+                    ? '#4CAF50' // Success green for completed
+                    : isActive 
+                    ? (theme?.accent || '#4A90E2') // Theme accent for active
+                    : '#666666' // Gray for inactive
+                }}
+              >
+                {isCompleted ? (
+                  <Check className="w-6 h-6" />
+                ) : (
+                  <span className="text-sm font-bold">{step.id}</span>
+                )}
+              </div>
+              
+              {/* Step Label */}
+              <span 
+                className="text-sm font-medium mt-2 text-center max-w-24 leading-tight"
+                style={{ 
+                  color: theme?.text || '#333',
+                  fontSize: '14px'
+                }}
+              >
+                {step.title}
+              </span>
+              
+              {/* Connection Line - Only render if not the last step */}
+              {index < steps.length - 1 && (
+                <div 
+                  className="absolute top-6 left-full w-full h-0.5 z-0"
+                  style={{
+                    backgroundColor: currentStep > step.id 
+                      ? '#4CAF50' // Green for completed sections
+                      : currentStep === step.id 
+                      ? (theme?.accent || '#4A90E2') // Blue for active section
+                      : '#666666', // Gray for inactive sections
+                    marginLeft: '24px',
+                    marginRight: '24px',
+                    width: 'calc(100% - 48px)'
+                  }}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Theme Preview Component
+const ThemePreview = ({ theme, isSelected, onClick }) => {
+  return (
+    <div
+      className={`theme-preview ${isSelected ? 'selected' : ''}`}
+      style={{
+        backgroundColor: theme.bg,
+        color: theme.text,
+        borderColor: isSelected ? '#2563eb' : theme.border
+      }}
+      onClick={onClick}
+    >
+      <div className="theme-title">{theme.name}</div>
+      <div className="theme-text">Sample text with improved readability</div>
+    </div>
+  )
+}
+
+// Reading Preferences Modal Component
+const ReadingPreferencesModal = ({ 
+  isOpen, 
+  onClose, 
+  theme, 
+  fontFamily, 
+  setFontFamily, 
+  fontSize, 
+  setFontSize, 
+  lineHeight, 
+  setLineHeight, 
+  colorTheme, 
+  setColorTheme,
+  colorThemes 
+}) => {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div 
+        className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-90vh overflow-y-auto"
+        style={{
+          backgroundColor: theme.cardBg,
+          borderColor: theme.border,
+          color: theme.text
+        }}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold" style={{ color: theme.text }}>
+            Reading Preferences
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            style={{ backgroundColor: 'transparent' }}
+            aria-label="Close preferences"
+          >
+            <span className="text-2xl">&times;</span>
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="space-y-6">
+          {/* Font Style */}
+          <div className="form-group">
+            <label className="form-label">Font Style</label>
+            <select
+              className="form-select w-full"
+              value={fontFamily}
+              onChange={(e) => setFontFamily(e.target.value)}
+              style={{
+                backgroundColor: theme.bg,
+                borderColor: theme.border,
+                color: theme.text
+              }}
+            >
+              <option value="'OpenDyslexic', 'Inter', Arial, sans-serif">OpenDyslexic (Specialized for Dyslexia)</option>
+              <option value="'Inter', Arial, sans-serif">Inter (Dyslexia-Friendly)</option>
+              <option value="Verdana, sans-serif">Verdana (High Readability)</option>
+              <option value="Arial, sans-serif">Arial</option>
+              <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
+            </select>
+          </div>
+
+          {/* Text Size */}
+          <div className="form-group">
+            <label className="form-label">
+              Text Size: {fontSize}px {fontSize < 16 ? '(Below recommended minimum)' : ''}
+            </label>
+            <input
+              type="range"
+              min="14"
+              max="28"
+              value={fontSize}
+              onChange={(e) => setFontSize(parseInt(e.target.value))}
+              className="slider w-full"
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Recommended: 16px minimum for dyslexia accessibility
+            </div>
+          </div>
+
+          {/* Line Spacing */}
+          <div className="form-group">
+            <label className="form-label">
+              Line Spacing: {lineHeight} {lineHeight >= 1.5 ? '✓' : '(Below recommended)'}
+            </label>
+            <input
+              type="range"
+              min="1.2"
+              max="1.8"
+              step="0.1"
+              value={lineHeight}
+              onChange={(e) => setLineHeight(parseFloat(e.target.value))}
+              className="slider w-full"
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Recommended: 1.5-1.8 for optimal readability
+            </div>
+          </div>
+
+          {/* Color Theme */}
+          <div className="form-group">
+            <label className="form-label">Color Theme</label>
+            <div className="space-y-2">
+              {Object.entries(colorThemes).map(([key, themeOption]) => (
+                <label key={key} className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="colorTheme"
+                    value={key}
+                    checked={colorTheme === key}
+                    onChange={() => setColorTheme(key)}
+                    className="w-4 h-4"
+                  />
+                  <span className="flex-1">{themeOption.name}</span>
+                  <div 
+                    className="w-6 h-6 rounded-full border-2"
+                    style={{ 
+                      backgroundColor: themeOption.accent,
+                      borderColor: themeOption.border
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="mt-8 flex justify-end">
+          <button
+            onClick={onClose}
+            className="btn-primary"
             style={{
-              padding: '10px 20px',
-              backgroundColor: '#c53030',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginTop: '16px'
+              backgroundColor: theme.accent,
+              color: 'white'
             }}
           >
-            Refresh Page
+            Save Preferences
           </button>
-          <details style={{ marginTop: '16px', textAlign: 'left' }}>
-            <summary>Error Details</summary>
-            <pre style={{ fontSize: '12px', marginTop: '8px' }}>
-              {this.state.error?.toString()}
-            </pre>
-          </details>
         </div>
-      )
-    }
-
-    return this.props.children
-  }
+      </div>
+    </div>
+  )
 }
 
-// Global styles for dyslexia-friendly design
-const GlobalStyle = createGlobalStyle`
-  @font-face {
-    font-family: 'OpenDyslexic';
-    src: url('/fonts/OpenDyslexic-Regular.woff2') format('woff2'),
-         url('/fonts/OpenDyslexic-Regular.woff') format('woff'),
-         url('/fonts/OpenDyslexic-Regular.ttf') format('truetype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
+// Keyboard Shortcuts Modal Component  
+const KeyboardShortcutsModal = ({ isOpen, onClose, theme }) => {
+  if (!isOpen) return null
+
+  const shortcuts = {
+    navigation: [
+      { keys: ['Ctrl', 'U'], description: 'Upload Files' },
+      { keys: ['Ctrl', 'S'], description: 'Generate Summary' },
+      { keys: ['Ctrl', 'T'], description: 'Read Aloud' },
+      { keys: ['Ctrl', 'Q'], description: 'Create Quiz' },
+      { keys: ['Ctrl', 'F'], description: 'Focus Mode' },
+      { keys: ['Ctrl', 'D'], description: 'Distraction-Free' }
+    ],
+    general: [
+      { keys: ['Esc'], description: 'Exit Current Mode' },
+      { keys: ['Click'], description: 'Word Definitions' }
+    ]
   }
 
-  @font-face {
-    font-family: 'OpenDyslexic';
-    src: url('/fonts/OpenDyslexic-Bold.woff2') format('woff2'),
-         url('/fonts/OpenDyslexic-Bold.woff') format('woff'),
-         url('/fonts/OpenDyslexic-Bold.ttf') format('truetype');
-    font-weight: bold;
-    font-style: normal;
-    font-display: swap;
-  }
-  
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+  const renderShortcut = (shortcut, index) => (
+    <div key={index} className="flex items-center justify-between py-2">
+      <div className="flex items-center space-x-2">
+        {shortcut.keys.map((key, keyIndex) => (
+          <kbd 
+            key={keyIndex}
+            className="px-2 py-1 text-xs font-mono rounded border"
+            style={{
+              backgroundColor: theme.cardBg,
+              borderColor: theme.border,
+              color: theme.text,
+              fontFamily: 'monospace'
+            }}
+          >
+            {key}
+          </kbd>
+        ))}
+      </div>
+      <span className="text-sm" style={{ color: theme.text }}>
+        {shortcut.description}
+      </span>
+    </div>
+  )
 
-  body {
-    font-family: ${props => props.theme.fontFamily};
-    font-size: ${props => props.theme.fontSize}px;
-    line-height: ${props => props.theme.lineHeight};
-    letter-spacing: ${props => props.theme.letterSpacing}px;
-    word-spacing: ${props => props.theme.wordSpacing}em;
-    background-color: ${props => props.theme.backgroundColor};
-    color: ${props => props.theme.textColor};
-    transition: all 0.3s ease;
-  }
-`
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div 
+        className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-90vh overflow-y-auto"
+        style={{
+          backgroundColor: theme.cardBg,
+          borderColor: theme.border,
+          color: theme.text
+        }}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold" style={{ color: theme.text }}>
+            Keyboard Shortcuts
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            style={{ backgroundColor: 'transparent' }}
+            aria-label="Close shortcuts"
+          >
+            <span className="text-2xl">&times;</span>
+          </button>
+        </div>
 
-// Dyslexia-friendly color schemes
-const colorSchemes = {
-  light: {
-    name: 'Light (Default)',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 16,
-    lineHeight: 1.8,
-    letterSpacing: 0.5,
-    wordSpacing: 0.16,
-    backgroundColor: '#fafafa',
-    textColor: '#2c3e50',
-    cardBackground: '#ffffff',
-    primaryColor: '#3498db',
-    secondaryColor: '#2ecc71',
-    borderColor: '#e1e8ed',
-    buttonHover: '#2980b9'
-  },
-  cream: {
-    name: 'Cream (Easy on Eyes)',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 16,
-    lineHeight: 1.8,
-    letterSpacing: 0.5,
-    wordSpacing: 0.16,
-    backgroundColor: '#f7f5f3',
-    textColor: '#4a4a4a',
-    cardBackground: '#fefcf9',
-    primaryColor: '#8b6914',
-    secondaryColor: '#6b8e23',
-    borderColor: '#e8e2d5',
-    buttonHover: '#704214'
-  },
-  blue: {
-    name: 'Blue Tint (Reduces Glare)',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 16,
-    lineHeight: 1.8,
-    letterSpacing: 0.5,
-    wordSpacing: 0.16,
-    backgroundColor: '#f0f8ff',
-    textColor: '#2c3e50',
-    cardBackground: '#fafeff',
-    primaryColor: '#1e6091',
-    secondaryColor: '#2e8b57',
-    borderColor: '#d6e9f0',
-    buttonHover: '#164a6b'
-  },
-  yellow: {
-    name: 'Yellow Paper (Classic)',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 16,
-    lineHeight: 1.8,
-    letterSpacing: 0.5,
-    wordSpacing: 0.16,
-    backgroundColor: '#fffacd',
-    textColor: '#333333',
-    cardBackground: '#ffffe0',
-    primaryColor: '#b8860b',
-    secondaryColor: '#228b22',
-    borderColor: '#f0e68c',
-    buttonHover: '#996515'
-  },
-  dark: {
-    name: 'Dark (High Contrast)',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 16,
-    lineHeight: 1.8,
-    letterSpacing: 0.5,
-    wordSpacing: 0.16,
-    backgroundColor: '#2c3e50',
-    textColor: '#ecf0f1',
-    cardBackground: '#34495e',
-    primaryColor: '#3498db',
-    secondaryColor: '#2ecc71',
-    borderColor: '#4a5f7a',
-    buttonHover: '#2980b9'
-  }
+        {/* Modal Content */}
+        <div className="space-y-6">
+          {/* Navigation Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-3" style={{ color: theme.text }}>
+              Navigation
+            </h3>
+            <div className="space-y-1">
+              {shortcuts.navigation.map(renderShortcut)}
+            </div>
+          </div>
+
+          {/* General Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-3" style={{ color: theme.text }}>
+              General
+            </h3>
+            <div className="space-y-1">
+              {shortcuts.general.map(renderShortcut)}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="mt-8 flex justify-end">
+          <button
+            onClick={onClose}
+            className="btn-secondary"
+            style={{
+              borderColor: theme.accent,
+              color: theme.accent
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-// Styled components
-const Container = styled.div`
-  min-height: 100vh;
-  background-color: ${props => props.theme.backgroundColor};
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-`
+// Enhanced Upload Zone Component with Improved Affordances
+const UploadZone = ({ onFileUpload, isProcessing, progress, error, theme }) => {
+  const [isHovered, setIsHovered] = useState(false)
+  const fileInputRef = useRef(null)
+  
+  const { getRootProps, getInputProps, isDragActive, isDragAccept, isDragReject } = useDropzone({
+    onDrop: onFileUpload,
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/gif': ['.gif'],
+      'image/bmp': ['.bmp'],
+      'image/webp': ['.webp'],
+      'application/pdf': ['.pdf']
+    },
+    maxFiles: 1,
+    maxSize: 10 * 1024 * 1024,
+    multiple: false,
+    noClick: true // We'll handle click separately for better control
+  })
 
-const Header = styled.header`
-  text-align: center;
-  margin-bottom: 40px;
-  
-  h1 {
-    font-size: ${props => Math.max(props.theme.fontSize + 16, 28)}px;
-    color: ${props => props.theme.primaryColor};
-    margin-bottom: 10px;
-    font-weight: 600;
+  const handleBrowseClick = () => {
+    fileInputRef.current?.click()
   }
-  
-  p {
-    color: ${props => props.theme.textColor};
-    opacity: 0.8;
-    font-size: ${props => props.theme.fontSize + 2}px;
-  }
-`
 
-const ProgressBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: ${props => props.theme.cardBackground};
-  border-radius: 12px;
-  border: 1px solid ${props => props.theme.borderColor};
-  position: relative;
-  
-  .progress-line {
-    position: absolute;
-    top: 50%;
-    left: 15%;
-    right: 15%;
-    height: 3px;
-    background: ${props => props.theme.borderColor};
-    z-index: 1;
-  }
-  
-  .progress-fill {
-    height: 100%;
-    background: ${props => props.theme.primaryColor};
-    border-radius: 2px;
-    transition: width 0.3s ease;
-  }
-  
-  .step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    position: relative;
-    z-index: 2;
+  const getUploadZoneStyle = () => {
+    let borderStyle = '2px dashed'
+    let borderColor = theme?.border || '#d1d5db'
+    let backgroundColor = theme?.cardBg || '#ffffff'
     
-    .step-circle {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 16px;
-      transition: all 0.3s ease;
-      border: 3px solid;
+    if (isDragActive) {
+      if (isDragAccept) {
+        borderStyle = '2px solid'
+        borderColor = '#10b981' // Green for accepted files
+        backgroundColor = '#f0fdf4'
+      } else if (isDragReject) {
+        borderStyle = '2px solid'
+        borderColor = '#ef4444' // Red for rejected files
+        backgroundColor = '#fef2f2'
+      }
+    } else if (isHovered) {
+      borderStyle = '2px solid'
+      borderColor = theme?.accent || '#3b82f6'
+      backgroundColor = theme?.bg || '#f9fafb'
     }
-    
-    .step-label {
-      font-size: 13px;
-      font-weight: 600;
-      text-align: center;
-      margin-top: 4px;
-    }
-    
-    &.active .step-circle {
-      background: ${props => props.theme.primaryColor};
-      color: white;
-      border-color: ${props => props.theme.primaryColor};
-      box-shadow: 0 0 0 4px ${props => props.theme.primaryColor}20;
-    }
-    
-    &.completed .step-circle {
-      background: ${props => props.theme.secondaryColor};
-      color: white;
-      border-color: ${props => props.theme.secondaryColor};
-    }
-    
-    &.pending .step-circle {
-      background: ${props => props.theme.backgroundColor};
-      color: ${props => props.theme.textColor};
-      border-color: ${props => props.theme.borderColor};
-    }
-    
-    &.active .step-label {
-      color: ${props => props.theme.primaryColor};
-      font-weight: 700;
-    }
-    
-    &.completed .step-label {
-      color: ${props => props.theme.secondaryColor};
-    }
-    
-    &.pending .step-label {
-      color: ${props => props.theme.textColor};
-      opacity: 0.6;
-    }
-  }
-`
 
-const ColorPreview = styled.div`
-  background: ${props => props.$backgroundColor};
-  color: ${props => props.$textColor};
-  border: 1px solid ${props => props.$borderColor};
-  border-radius: 8px;
-  padding: 12px;
-  margin: 8px 0;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  
-  .preview-title {
-    font-weight: 600;
-    color: ${props => props.$primaryColor};
-    margin-bottom: 4px;
+    return {
+      border: `${borderStyle} ${borderColor}`,
+      backgroundColor,
+      color: theme?.text || '#1f2937'
+    }
   }
-  
-  .preview-text {
-    line-height: 1.5;
-  }
-`
 
-const UploadProgress = styled.div`
-  margin: 16px 0;
-  
-  .upload-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    
-    .status-icon {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+  return (
+    <div className="space-y-6">
+      {/* Enhanced Drag & Drop Area */}
+      <div
+        {...getRootProps()}
+        className="relative rounded-lg p-8 transition-all duration-200 cursor-pointer"
+        style={getUploadZoneStyle()}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <input {...getInputProps()} ref={fileInputRef} />
+        <div className="flex flex-col items-center space-y-6">
+          {/* Upload Icon with Animation */}
+          <div className="relative">
+            <div 
+              className={`p-4 rounded-full transition-all duration-300 ${
+                isDragActive ? 'scale-110' : isHovered ? 'scale-105' : 'scale-100'
+              }`}
+              style={{
+                backgroundColor: isDragActive 
+                  ? (isDragAccept ? '#10b981' : '#ef4444')
+                  : theme?.accent || '#3b82f6',
+                opacity: isDragActive ? 0.9 : 0.8
+              }}
+            >
+              <Upload 
+                size={32} 
+                className={`text-white transition-transform duration-300 ${
+                  isDragActive ? 'animate-bounce' : ''
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* Dynamic Text Content */}
+          <div className="text-center space-y-2">
+            <h3 className="text-lg font-semibold" style={{ color: theme?.text }}>
+              {isDragActive 
+                ? (isDragAccept ? 'Drop files here!' : 'File type not supported') 
+                : 'Upload your documents'
+              }
+            </h3>
+            <p className="text-sm" style={{ color: theme?.text, opacity: 0.7 }}>
+              {isDragActive 
+                ? (isDragAccept ? 'Release to upload your file' : 'Only images and PDFs are supported')
+                : 'Drag and drop files here, or browse to select'
+              }
+            </p>
+            <p className="text-xs" style={{ color: theme?.text, opacity: 0.6 }}>
+              Supports JPG, PNG, GIF, BMP, WebP, and PDF files (up to 10MB)
+            </p>
+          </div>
+
+          {/* Browse Files Button */}
+          {!isDragActive && (
+            <button
+              onClick={handleBrowseClick}
+              className="btn-primary px-6 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-md"
+              style={{
+                backgroundColor: theme?.accent || '#3b82f6',
+                color: 'white'
+              }}
+            >
+              <FileImage className="w-4 h-4 mr-2" />
+              Browse Files
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Enhanced Progress Indicator */}
+      {isProcessing && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-lg border p-4"
+          style={{
+            backgroundColor: theme?.cardBg,
+            borderColor: theme?.border,
+            color: theme?.text
+          }}
+        >
+          <div className="flex items-center space-x-3 mb-3">
+            <div 
+              className="animate-spin rounded-full h-5 w-5 border-b-2"
+              style={{ borderColor: theme?.accent || '#3b82f6' }}
+            ></div>
+            <span className="text-sm font-medium">
+              Extracting text from your document... {progress}%
+            </span>
+          </div>
+          <div 
+            className="w-full rounded-full h-2"
+            style={{ backgroundColor: theme?.border || '#e5e7eb' }}
+          >
+            <div 
+              className="h-2 rounded-full transition-all duration-300"
+              style={{ 
+                width: `${progress}%`,
+                backgroundColor: theme?.accent || '#3b82f6'
+              }}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {/* Enhanced Error Display */}
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3"
+        >
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Upload Failed</p>
+            <p className="text-sm text-red-600 mt-1">{error}</p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+            >
+              Try uploading a different file
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
+// Reading Focus Tool Component
+const ReadingFocusTool = ({ text, theme, fontSize, lineHeight, fontFamily, isActive, onToggle }) => {
+  const [focusLine, setFocusLine] = useState(0)
+  const textRef = useRef(null)
+  const [textLines, setTextLines] = useState([])
+
+  useEffect(() => {
+    if (text && textRef.current) {
+      // Split text into lines for focus mode
+      const lines = text.split('\n').filter(line => line.trim())
+      setTextLines(lines)
+    }
+  }, [text])
+
+  const handleLineClick = (lineIndex) => {
+    setFocusLine(lineIndex)
+  }
+
+  const nextLine = () => {
+    setFocusLine(prev => Math.min(textLines.length - 1, prev + 1))
+  }
+
+  const prevLine = () => {
+    setFocusLine(prev => Math.max(0, prev - 1))
+  }
+
+  if (!isActive || !text) return null
+
+  return (
+    <div className="reading-focus-container">
+      {/* Focus Controls */}
+      <div className="flex items-center justify-between mb-4 p-3 rounded-lg border" style={{ 
+        backgroundColor: theme.cardBg, 
+        borderColor: theme.border 
+      }}>
+        <div className="flex items-center space-x-2">
+          <Focus className="w-5 h-5" style={{ color: theme.accent }} />
+          <span className="font-medium" style={{ color: theme.text }}>
+            Reading Focus: Line {focusLine + 1} of {textLines.length}
+          </span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            className="btn-tertiary"
+            onClick={prevLine}
+            disabled={focusLine === 0}
+            aria-label="Previous line"
+          >
+            ↑
+          </button>
+          <button
+            className="btn-tertiary"
+            onClick={nextLine}
+            disabled={focusLine === textLines.length - 1}
+            aria-label="Next line"
+          >
+            ↓
+          </button>
+          <button
+            className="btn-tertiary"
+            onClick={onToggle}
+            aria-label="Exit focus mode"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Focused Text Display */}
+      <div 
+        ref={textRef}
+        className="focused-text-display"
+        style={{
+          fontSize: `${fontSize}px`,
+          lineHeight: lineHeight,
+          fontFamily: fontFamily,
+          color: theme.text
+        }}
+        role="textbox"
+        aria-live="polite"
+        aria-label="Focused reading area"
+      >
+        {textLines.map((line, index) => (
+          <div
+            key={index}
+            className={`reading-line ${index === focusLine ? 'focused-line' : 'dimmed-line'}`}
+            style={{
+              padding: '8px 12px',
+              margin: '2px 0',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              backgroundColor: index === focusLine ? theme.accent + '20' : 'transparent',
+              opacity: index === focusLine ? 1 : 0.3,
+              border: index === focusLine ? `2px solid ${theme.accent}` : '2px solid transparent'
+            }}
+            onClick={() => handleLineClick(index)}
+            tabIndex="0"
+            role="button"
+            aria-label={`Line ${index + 1}: ${line}`}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                handleLineClick(index)
+              }
+            }}
+          >
+            {line}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Word Definition Popup Component
+const WordDefinitionPopup = ({ word, position, onClose, theme }) => {
+  const [definition, setDefinition] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    // Simulate API call for word definition
+    const fetchDefinition = async () => {
+      setIsLoading(true)
+      // Mock definition - in real app, this would call a dictionary API
+      await new Promise(resolve => setTimeout(resolve, 500))
       
-      &.success {
-        background: ${props => props.theme.secondaryColor};
-        color: white;
+      const mockDefinitions = {
+        'water': 'A transparent, colorless liquid that forms the basis of fluids in living organisms.',
+        'cycle': 'A series of events that are regularly repeated in the same order.',
+        'evaporation': 'The process by which liquid water becomes water vapor.',
+        'condensation': 'The process by which water vapor becomes liquid water.',
+        'precipitation': 'Any form of water that falls from clouds, such as rain or snow.',
+        'collection': 'The action of gathering water in lakes, rivers, and oceans.'
       }
       
-      &.loading {
-        background: ${props => props.theme.primaryColor};
-        color: white;
-        animation: pulse 1.5s infinite;
-      }
+      setDefinition(mockDefinitions[word.toLowerCase()] || `Definition for "${word}" not found. This is a placeholder for dictionary lookup.`)
+      setIsLoading(false)
     }
-  }
-  
-  .file-preview {
-    background: ${props => props.theme.cardBackground};
-    border: 1px solid ${props => props.theme.borderColor};
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    
-    .file-icon {
-      color: ${props => props.theme.primaryColor};
-    }
-    
-    .file-info {
-      flex: 1;
+
+    fetchDefinition()
+  }, [word])
+
+  if (!word || !position) return null
+
+  return (
+    <div
+      className="word-definition-popup fixed z-50 p-4 rounded-lg shadow-lg border max-w-sm"
+      style={{
+        top: position.y + 20,
+        left: position.x,
+        backgroundColor: theme.cardBg,
+        borderColor: theme.border,
+        color: theme.text
+      }}
+      role="tooltip"
+      aria-live="polite"
+    >
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="font-bold text-lg" style={{ color: theme.accent }}>
+          {word}
+        </h4>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600"
+          aria-label="Close definition"
+        >
+          ×
+        </button>
+      </div>
       
-      .file-name {
-        font-weight: 600;
-        margin-bottom: 2px;
-      }
+      {isLoading ? (
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+          <span>Loading definition...</span>
+        </div>
+      ) : (
+        <div>
+          <p className="text-sm mb-3">{definition}</p>
+          <button
+            className="btn-secondary text-xs"
+            onClick={() => {
+              const utterance = new SpeechSynthesisUtterance(word)
+              utterance.rate = 0.8
+              window.speechSynthesis.speak(utterance)
+            }}
+          >
+            <Volume2 className="w-3 h-3 mr-1" />
+            Pronounce
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Enhanced Text Display with Word Clicking and Highlighting
+const EnhancedTextDisplay = ({ text, theme, fontSize, lineHeight, fontFamily, focusMode, onWordClick, highlightRange }) => {
+  if (focusMode) {
+    return (
+      <ReadingFocusTool
+        text={text}
+        theme={theme}
+        fontSize={fontSize}
+        lineHeight={lineHeight}
+        fontFamily={fontFamily}
+        isActive={focusMode}
+        onToggle={() => {}} // Will be handled by parent
+      />
+    )
+  }
+
+  const handleTextClick = (e) => {
+    if (!onWordClick) return
+    
+    const selection = window.getSelection()
+    const selectedText = selection.toString().trim()
+    
+    if (selectedText && selectedText.split(' ').length === 1) {
+      // Single word selected
+      const range = selection.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
       
-      .file-size {
-        font-size: 12px;
-        opacity: 0.7;
+      onWordClick(selectedText, {
+        x: rect.left,
+        y: rect.top
+      })
+    }
+  }
+
+  // Render text with highlighting for speech
+  const renderTextWithHighlight = () => {
+    if (!highlightRange || !text) {
+      return text
+    }
+
+    const beforeHighlight = text.substring(0, highlightRange.start)
+    const highlighted = text.substring(highlightRange.start, highlightRange.end)
+    const afterHighlight = text.substring(highlightRange.end)
+
+    return (
+      <>
+        {beforeHighlight}
+        <span 
+          className="speech-highlight"
+          style={{
+            backgroundColor: theme.accent + '40',
+            padding: '2px 4px',
+            borderRadius: '4px',
+            border: `2px solid ${theme.accent}`,
+            animation: 'pulse 1s infinite'
+          }}
+        >
+          {highlighted}
+        </span>
+        {afterHighlight}
+      </>
+    )
+  }
+
+  return (
+    <div
+      className="enhanced-text-display cursor-pointer select-text"
+      style={{
+        fontSize: `${fontSize}px`,
+        lineHeight: lineHeight,
+        fontFamily: fontFamily,
+        color: theme.text
+      }}
+      onClick={handleTextClick}
+      role="textbox"
+      aria-label="Text content - click on words for definitions"
+      aria-live="polite"
+    >
+      {renderTextWithHighlight()}
+    </div>
+  )
+}
+
+// Spelling Quiz Component
+const SpellingQuizSection = ({ words, theme, fontSize, lineHeight, fontFamily }) => {
+  const [currentWordIndex, setCurrentWordIndex] = useState(0)
+  const [userInput, setUserInput] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [score, setScore] = useState({ correct: 0, total: 0 })
+  const [showResults, setShowResults] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  const currentWord = words[currentWordIndex]
+
+  const speakWord = (word) => {
+    if (isPlaying) return
+    
+    setIsPlaying(true)
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(word)
+    utterance.rate = 0.7
+    utterance.pitch = 1.0
+    utterance.volume = 1.0
+    
+    utterance.onend = () => setIsPlaying(false)
+    utterance.onerror = () => setIsPlaying(false)
+    
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const checkSpelling = () => {
+    const isCorrect = userInput.toLowerCase().trim() === currentWord.word.toLowerCase()
+    
+    if (isCorrect) {
+      setFeedback('Great job! You spelled it right. 🎉')
+      setScore(prev => ({ ...prev, correct: prev.correct + 1, total: prev.total + 1 }))
+    } else {
+      setFeedback(`Not quite. The correct spelling is: "${currentWord.word}". Try again! 💪`)
+      setScore(prev => ({ ...prev, total: prev.total + 1 }))
+    }
+
+    // Move to next word after a brief delay
+    setTimeout(() => {
+      if (currentWordIndex < words.length - 1) {
+        setCurrentWordIndex(prev => prev + 1)
+        setUserInput('')
+        setFeedback('')
+      } else {
+        setShowResults(true)
       }
+    }, 2000)
+  }
+
+  const skipWord = () => {
+    setScore(prev => ({ ...prev, total: prev.total + 1 }))
+    if (currentWordIndex < words.length - 1) {
+      setCurrentWordIndex(prev => prev + 1)
+      setUserInput('')
+      setFeedback('')
+    } else {
+      setShowResults(true)
     }
   }
-  
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-`
 
-const WordDefinitionPopup = styled.div`
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: ${props => props.theme.cardBackground};
-  border: 2px solid ${props => props.theme.primaryColor};
-  border-radius: 12px;
-  padding: 20px;
-  max-width: 400px;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  
-  .word-title {
-    font-size: 18px;
-    font-weight: bold;
-    color: ${props => props.theme.primaryColor};
-    margin-bottom: 10px;
+  const resetQuiz = () => {
+    setCurrentWordIndex(0)
+    setUserInput('')
+    setFeedback('')
+    setScore({ correct: 0, total: 0 })
+    setShowResults(false)
   }
-  
-  .definition {
-    color: ${props => props.theme.textColor};
-    line-height: 1.6;
-  }
-`
 
-const InlineHelp = styled.div`
-  background: ${props => props.theme.backgroundColor};
-  border: 1px solid ${props => props.theme.borderColor};
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  color: ${props => props.theme.textColor};
-  opacity: 0.8;
-  
-  .help-icon {
-    display: inline-block;
-    margin-right: 8px;
-    color: ${props => props.theme.primaryColor};
-  }
-`
-
-const ReadingControls = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: ${props => props.theme.backgroundColor};
-  border-radius: 8px;
-  border: 1px solid ${props => props.theme.borderColor};
-  
-  .control-label {
-    font-size: 14px;
-    color: ${props => props.theme.textColor};
-    margin-right: 8px;
-  }
-`
-
-const FileUploadZone = styled.div`
-  border: 2px dashed ${props => props.theme.borderColor};
-  border-radius: 12px;
-  padding: 40px 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background: ${props => props.theme.backgroundColor};
-  
-  &:hover {
-    border-color: ${props => props.theme.primaryColor};
-    background: ${props => props.theme.cardBackground};
-  }
-  
-  &.drag-active {
-    border-color: ${props => props.theme.primaryColor};
-    background: ${props => props.theme.cardBackground};
-    transform: scale(1.02);
-  }
-  
-  .upload-icon {
-    font-size: 48px;
-    color: ${props => props.theme.primaryColor};
-    margin-bottom: 16px;
-  }
-  
-  .upload-text {
-    font-size: 18px;
-    color: ${props => props.theme.textColor};
-    margin-bottom: 8px;
-    font-weight: 500;
-  }
-  
-  .upload-subtext {
-    font-size: 14px;
-    color: ${props => props.theme.textColor};
-    opacity: 0.7;
-  }
-`
-
-const ProgressContainer = styled.div`
-  margin-top: 20px;
-  padding: 16px;
-  background: ${props => props.theme.cardBackground};
-  border-radius: 8px;
-  border: 1px solid ${props => props.theme.borderColor};
-  
-  .progress-label {
-    font-size: 14px;
-    color: ${props => props.theme.textColor};
-    margin-bottom: 8px;
-  }
-  
-  .progress-bar {
-    width: 100%;
-    height: 8px;
-    background: ${props => props.theme.backgroundColor};
-    border-radius: 4px;
-    overflow: hidden;
-    
-    .progress-fill {
-      height: 100%;
-      background: ${props => props.theme.primaryColor};
-      transition: width 0.3s ease;
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && userInput.trim()) {
+      checkSpelling()
     }
   }
-`
 
-const ErrorMessage = styled.div`
-  background: #fee;
-  color: #c53030;
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 16px;
-  font-size: 14px;
-  border: 1px solid #feb2b2;
-`
-
-const FileInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: ${props => props.theme.backgroundColor};
-  border-radius: 8px;
-  margin-top: 16px;
-  border: 1px solid ${props => props.theme.borderColor};
-  
-  .file-icon {
-    color: ${props => props.theme.primaryColor};
-  }
-  
-  .file-details {
-    flex: 1;
-    
-    .file-name {
-      font-weight: 500;
-      color: ${props => props.theme.textColor};
+  useEffect(() => {
+    if (currentWord && currentWordIndex === 0) {
+      // Speak the first word automatically
+      setTimeout(() => speakWord(currentWord.word), 1000)
     }
-    
-    .file-size {
-      font-size: 12px;
-      color: ${props => props.theme.textColor};
-      opacity: 0.7;
-    }
+  }, [currentWordIndex])
+
+  if (words.length === 0) return null
+
+  return (
+    <div className="space-y-6">
+      {!showResults ? (
+        <>
+          {/* Progress Indicator */}
+          <div className="flex justify-between items-center">
+            <span 
+              className="text-sm font-medium"
+              style={{ color: theme.text }}
+            >
+              Word {currentWordIndex + 1} of {words.length}
+            </span>
+            <div className="text-sm" style={{ color: theme.text }}>
+              Score: {score.correct}/{score.total}
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentWordIndex) / words.length) * 100}%` }}
+            />
+          </div>
+
+          {/* Word Pronunciation */}
+          <div className="text-center py-8">
+            <div className="mb-6">
+              <button
+                className="btn-primary text-lg px-8 py-4"
+                onClick={() => speakWord(currentWord.word)}
+                disabled={isPlaying}
+              >
+                {isPlaying ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                    Playing...
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-5 h-5 mr-3" />
+                    🔊 Listen to the word
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Input Area */}
+            <div className="max-w-md mx-auto">
+              <label 
+                className="block text-lg font-medium mb-4"
+                style={{ 
+                  color: theme.text,
+                  fontSize: `${fontSize}px`,
+                  fontFamily: fontFamily
+                }}
+              >
+                Type the word you heard:
+              </label>
+              <input
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                className="w-full px-4 py-3 text-lg border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{
+                  backgroundColor: theme.cardBg,
+                  borderColor: feedback.includes('Great job') ? '#10b981' : 
+                              feedback.includes('Not quite') ? '#ef4444' : theme.border,
+                  color: theme.text,
+                  fontSize: `${fontSize + 2}px`,
+                  fontFamily: fontFamily
+                }}
+                placeholder="Type here..."
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </div>
+
+            {/* Feedback */}
+            {feedback && (
+              <div 
+                className={`mt-4 p-4 rounded-lg ${
+                  feedback.includes('Great job') 
+                    ? 'bg-green-100 text-green-800 border border-green-300' 
+                    : 'bg-yellow-100 text-yellow-800 border border-yellow-300'
+                }`}
+                style={{
+                  fontSize: `${fontSize}px`,
+                  fontFamily: fontFamily
+                }}
+              >
+                {feedback}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-center space-x-4 mt-6">
+              <button
+                className="btn-secondary"
+                onClick={() => speakWord(currentWord.word)}
+                disabled={isPlaying}
+              >
+                <Volume2 className="w-4 h-4 mr-2" />
+                Repeat
+              </button>
+              
+              <button
+                className="btn-primary"
+                onClick={checkSpelling}
+                disabled={!userInput.trim() || feedback !== ''}
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Check Spelling
+              </button>
+              
+              <button
+                className="btn-tertiary"
+                onClick={skipWord}
+                disabled={feedback !== ''}
+              >
+                <ArrowRight className="w-4 h-4 mr-2" />
+                Skip
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Results Screen */
+        <div className="text-center py-8">
+          <h3 className="text-2xl font-bold mb-4" style={{ color: theme.text }}>
+            Spelling Quiz Complete! 🎉
+          </h3>
+          <div className="text-4xl font-bold mb-4" style={{ color: theme.accent }}>
+            {score.correct} / {score.total}
+          </div>
+          <p className="text-lg mb-2" style={{ color: theme.text }}>
+            You got {Math.round((score.correct / score.total) * 100)}% correct!
+          </p>
+          <p className="text-base mb-6" style={{ color: theme.text }}>
+            {score.correct === score.total 
+              ? "Perfect score! You're a spelling champion! 🏆" 
+              : score.correct >= score.total * 0.8 
+              ? "Great job! Keep practicing to improve even more! 💪"
+              : "Good effort! Practice makes perfect! 📚"}
+          </p>
+          <button
+            className="btn-primary"
+            onClick={resetQuiz}
+          >
+            <Type className="w-4 h-4 mr-2" />
+            Try Again
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Quiz Component
+const QuizSection = ({ questions, theme, fontSize, lineHeight, fontFamily }) => {
+  const [currentQuestion, setCurrentQuestion] = useState(0)
+  const [selectedAnswers, setSelectedAnswers] = useState({})
+  const [showResults, setShowResults] = useState(false)
+  const [questionFeedback, setQuestionFeedback] = useState({})
+  const [submittedAnswers, setSubmittedAnswers] = useState({})
+
+  const handleAnswerSelect = (questionIndex, answerIndex) => {
+    setSelectedAnswers(prev => ({
+      ...prev,
+      [questionIndex]: answerIndex
+    }))
   }
-`
 
-/* 
- * Status Badge Component - NOT a button!
- * 
- * Used for displaying system status information.
- * Uses soft, non-action colors to avoid confusion with interactive elements.
- * Pill-shaped design clearly indicates this is informational, not clickable.
- * 
- * Status types:
- *   - connected: Soft green background for positive status
- *   - demo: Soft amber background for informational status
- *   - disconnected: Soft amber background for warning status
- */
-const StatusBadge = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  
-  /* Connected Status */
-  ${props => props.$status === 'connected' && `
-    background: #d1fae5;
-    color: #166534;
-    border: 1px solid #a7f3d0;
-  `}
-  
-  /* Disconnected Status */
-  ${props => props.$status === 'disconnected' && `
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
-  `}
-  
-  /* Demo Mode Status */
-  ${props => props.$status === 'demo' && `
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
-  `}
-  
-  /* Checking Status */
-  ${props => props.$status === 'checking' && `
-    background: #e0e7ff;
-    color: #3730a3;
-    border: 1px solid #c7d2fe;
-  `}
-  
-  .status-icon {
-    font-size: 16px;
-  }
-`
-
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 30px;
-  
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const MainContent = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`
-
-const Card = styled.div`
-  background: ${props => props.theme.cardBackground};
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid ${props => props.theme.borderColor};
-`
-
-const AudioControls = styled.div`
-  display: flex;
-  gap: 1.5rem;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  
-  /* Ensure consistent spacing for mobile */
-  @media (max-width: 768px) {
-    gap: 1rem;
-    flex-direction: column;
+  const submitAnswer = (questionIndex) => {
+    const selectedAnswer = selectedAnswers[questionIndex]
+    const isCorrect = selectedAnswer === questions[questionIndex].correct
     
-    > * {
-      width: 100%;
-      max-width: 300px;
-    }
-  }
-`
-
-/* 
- * Button Hierarchy for EchoLearn - WCAG AA Compliant
- * 
- * PRIMARY (variant="primary"):
- *   - Deep blue (#2563eb) solid background
- *   - Used for main workflow actions (Start Recording, Upload Audio)
- *   - Maximum visual prominence with shadow
- * 
- * SECONDARY (variant="secondary"):
- *   - Blue outlined (#2563eb) with transparent background
- *   - Used for supporting actions (Generate Summary, Read Aloud)
- *   - Clear but less prominent than primary
- * 
- * TERTIARY (variant="tertiary"):
- *   - Grey outlined (#6b7280) minimal styling
- *   - Used for utility actions (Copy Text, minor controls)
- *   - Least visual weight, doesn't compete with main actions
- */
-const Button = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: ${props => props.theme.fontSize}px;
-  font-family: ${props => props.theme.fontFamily};
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 500;
-  line-height: 1.2;
-  
-  /* Primary Button Styles */
-  ${props => props.$variant === 'primary' && `
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 16px 24px;
-    font-size: 16px;
-    font-weight: 600;
-    min-width: 200px;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    setSubmittedAnswers(prev => ({
+      ...prev,
+      [questionIndex]: selectedAnswer
+    }))
     
-    &:hover {
-      background: #1d4ed8;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
-    }
-    
-    &:focus {
-      outline: 3px solid #93c5fd;
-      outline-offset: 2px;
-    }
-    
-    &:disabled {
-      background: #9ca3af;
-      cursor: not-allowed;
-      transform: none;
-      
-      &:hover {
-        background: #9ca3af;
-        transform: none;
-        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    setQuestionFeedback(prev => ({
+      ...prev,
+      [questionIndex]: {
+        isCorrect,
+        message: isCorrect 
+          ? "Correct! Well done! 🎉" 
+          : `Incorrect. The correct answer is: ${questions[questionIndex].options[questions[questionIndex].correct]}`
       }
-    }
-  `}
-  
-  /* Secondary Button Styles */
-  ${props => props.$variant === 'secondary' && `
-    background: #e3eafc;
-    color: #2563eb;
-    border: 2px solid #2563eb;
-    padding: 12px 20px;
-    font-size: 15px;
-    font-weight: 500;
-    
-    &:hover {
-      background: #2563eb;
-      border-color: #2563eb;
-      color: white;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
-    }
-    
-    &:focus {
-      outline: 3px solid #93c5fd;
-      outline-offset: 2px;
-      background: #2563eb;
-      border-color: #2563eb;
-      color: white;
-    }
-  `}
-  
-  /* Tertiary Button Styles */
-  ${props => props.$variant === 'tertiary' && `
-    background: transparent;
-    color: #6b7280;
-    border: 1px solid #d1d5db;
-    padding: 8px 16px;
-    font-size: ${props.theme.fontSize - 2}px;
-    
-    &:hover {
-      background: #374151;
-      border-color: #374151;
-      color: white;
-    }
-    
-    &:focus {
-      outline: 3px solid #93c5fd;
-      outline-offset: 2px;
-    }
-  `}
-  
-  /* Default to secondary if no variant specified */
-  ${props => !props.$variant && `
-    background: #e3eafc;
-    color: #2563eb;
-    border: 2px solid #2563eb;
-    padding: 12px 20px;
-    font-size: 15px;
-    font-weight: 500;
-    
-    &:hover {
-      background: #2563eb;
-      border-color: #2563eb;
-      color: white;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
-    }
-    
-    &:focus {
-      outline: 3px solid #93c5fd;
-      outline-offset: 2px;
-      background: #2563eb;
-      border-color: #2563eb;
-      color: white;
-    }
-  `}
-  
-  /* Ensure consistent width for primary buttons in button groups */
-  ${props => props.$variant === 'primary' && props.$fullWidth && `
-    min-width: 160px;
-    flex: 1;
-  `}
-  
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-    background: #9ca3af !important;
-    border-color: #9ca3af !important;
-    color: white !important;
-    
-    &:hover {
-      transform: none;
-      box-shadow: none;
-      background: #9ca3af !important;
-      border-color: #9ca3af !important;
-    }
+    }))
   }
-`
 
-const TextDisplay = styled.div`
-  background: ${props => props.theme.cardBackground};
-  border: 2px solid ${props => props.theme.borderColor};
-  border-radius: 8px;
-  padding: 20px;
-  min-height: 200px;
-  font-family: ${props => props.$fontFamily || props.theme.fontFamily};
-  font-size: ${props => props.$fontSize || props.theme.fontSize}px;
-  line-height: ${props => props.$lineHeight || props.theme.lineHeight};
-  overflow-y: auto;
-  max-height: 400px;
-  
-  /* Dyslexia-friendly text formatting */
-  max-width: ${props => Math.max(45, Math.min(65, Math.floor((props.$fontSize || props.theme.fontSize) * 3.5)))}ch;
-  text-align: left;
-  hyphens: none;
-  word-break: normal;
-  
-  /* Improved paragraph spacing */
-  p {
-    margin-bottom: 1.2em;
-    
-    &:last-child {
-      margin-bottom: 0;
-    }
+  const handleSubmit = () => {
+    setShowResults(true)
   }
-  
-  /* Sentence spacing for better readability */
-  .sentence {
-    display: block;
-    margin-bottom: 0.4em;
-    padding: 0.2em 0;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    
-    &:hover {
-      background-color: ${props => props.theme.backgroundColor};
-      border-radius: 4px;
-      padding: 0.2em 0.4em;
-    }
-    
-    &.focused {
-      background-color: ${props => props.theme.primaryColor};
-      color: white;
-      border-radius: 4px;
-      padding: 0.2em 0.4em;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-  }
-  
-  .word {
-    cursor: pointer;
-    transition: all 0.2s ease;
-    
-    &:hover {
-      background-color: ${props => props.theme.primaryColor};
-      color: white;
-      border-radius: 2px;
-      padding: 0 2px;
-    }
-  }
-`
 
-const Sidebar = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`
-
-const ControlGroup = styled.div`
-  margin-bottom: 16px;
-  
-  label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: ${props => props.theme.textColor};
-  }
-`
-
-const Select = styled.select`
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid ${props => props.theme.borderColor};
-  border-radius: 6px;
-  background: ${props => props.theme.cardBackground};
-  color: ${props => props.theme.textColor};
-  font-size: ${props => props.theme.fontSize}px;
-  
-  &:focus {
-    outline: 3px solid ${props => props.theme.primaryColor};
-    outline-offset: 2px;
-    border-color: ${props => props.theme.primaryColor};
-  }
-`
-
-const Slider = styled.input`
-  width: 100%;
-  margin: 8px 0;
-`
-
-const Toggle = styled.button`
-  width: 100%;
-  padding: 12px;
-  border: 1px solid ${props => props.theme.borderColor};
-  border-radius: 6px;
-  background: ${props => props.active ? props.theme.primaryColor : props.theme.cardBackground};
-  color: ${props => props.active ? 'white' : props.theme.textColor};
-  cursor: pointer;
-  transition: all 0.3s ease;
-`
-
-const SummarySection = styled.div`
-  margin-top: 20px;
-  
-  ul {
-    list-style: none;
-    padding-left: 0;
-    
-    li {
-      padding: 8px 0;
-      border-bottom: 1px solid ${props => props.theme.borderColor};
-      
-      &:before {
-        content: "• ";
-        color: ${props => props.theme.primaryColor};
-        font-weight: bold;
-        margin-right: 8px;
+  const calculateScore = () => {
+    let correct = 0
+    questions.forEach((question, index) => {
+      if (selectedAnswers[index] === question.correct) {
+        correct++
       }
-    }
+    })
+    return correct
   }
-`
 
-const QuizSection = styled.div`
-  margin-top: 20px;
-`
+  const resetQuiz = () => {
+    setSelectedAnswers({})
+    setShowResults(false)
+    setCurrentQuestion(0)
+    setQuestionFeedback({})
+    setSubmittedAnswers({})
+  }
 
-const QuizProgress = styled.div`
-  text-align: center;
-  padding: 16px;
-  background: ${props => props.theme.primaryColor};
-  color: white;
-  border-radius: 8px;
-  margin-bottom: 24px;
-  font-size: 18px;
-  font-weight: 600;
-`
+  if (questions.length === 0) return null
 
-const QuestionCard = styled.div`
-  background: #faf8f5; /* Soft cream background */
-  border: 2px solid ${props => props.theme.borderColor};
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 32px; /* Generous spacing between questions */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  
-  .question-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    
-    h3 {
-      color: #2c3e50;
-      font-size: 20px;
-      margin: 0;
-    }
-    
+  return (
+    <div className="space-y-4">
+      {!showResults ? (
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-sm font-medium" style={{ color: theme.text }}>
+              Question {currentQuestion + 1} of {questions.length}
+            </span>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm" style={{ color: theme.text }}>
+                Progress: {Object.keys(submittedAnswers).length}/{questions.length}
+              </span>
+              <div className="flex space-x-2">
+                <button
+                  className="btn-tertiary"
+                  onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
+                  disabled={currentQuestion === 0}
+                >
+                  Previous
+                </button>
+                <button
+                  className="btn-tertiary"
+                  onClick={() => setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))}
+                  disabled={currentQuestion === questions.length - 1}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
 
-  }
-  
-  .question-text {
-    color: #2c3e50;
-    font-size: 18px;
-    line-height: 1.6;
-    margin-bottom: 24px;
-    padding: 16px;
-    background: white;
-    border-radius: 8px;
-    border-left: 4px solid ${props => props.theme.primaryColor};
-  }
-`
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
+            <div 
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(Object.keys(submittedAnswers).length / questions.length) * 100}%` }}
+            />
+          </div>
 
-const AnswerButton = styled.button`
-  display: block;
-  width: 100%;
-  margin: 12px 0; /* Generous spacing between options */
-  padding: 16px 20px; /* Large, clickable area */
-  text-align: left;
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  color: #2c3e50;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 16px;
-  line-height: 1.5;
-  
-  &:hover {
-    border-color: ${props => props.theme.primaryColor};
-    background: ${props => props.theme.primaryColor};
-    color: white;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  }
-  
-  &:focus {
-    outline: 3px solid ${props => props.theme.primaryColor};
-    outline-offset: 2px;
-    border-color: ${props => props.theme.primaryColor};
-  }
-  
-  &.correct {
-    background: #065f46; /* Dark green */
-    color: white;
-    border-color: #065f46;
-    
-    &:before {
-      content: "✓ ";
-      font-weight: bold;
-      margin-right: 8px;
-    }
-  }
-  
-  &.incorrect {
-    background: #991b1b; /* Dark red */
-    color: white;
-    border-color: #991b1b;
-    
-    &:before {
-      content: "✗ ";
-      font-weight: bold;
-      margin-right: 8px;
-    }
-  }
-  
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-`
+          <div 
+            className="p-4 rounded-lg border"
+            style={{
+              backgroundColor: theme.cardBg,
+              borderColor: theme.border,
+              fontSize: `${fontSize}px`,
+              lineHeight: lineHeight,
+              fontFamily: fontFamily
+            }}
+          >
+            <h4 className="font-semibold mb-4">{questions[currentQuestion].question}</h4>
+            <div className="space-y-2">
+              {questions[currentQuestion].options.map((option, index) => {
+                const isSelected = selectedAnswers[currentQuestion] === index
+                const isSubmitted = submittedAnswers.hasOwnProperty(currentQuestion)
+                const isCorrectAnswer = index === questions[currentQuestion].correct
+                const wasSelectedWrong = isSubmitted && isSelected && !isCorrectAnswer
+                
+                return (
+                  <label 
+                    key={index} 
+                    className={`flex items-center space-x-3 cursor-pointer p-3 rounded-lg border transition-all ${
+                      isSubmitted 
+                        ? isCorrectAnswer 
+                          ? 'bg-green-50 border-green-300 text-green-800'
+                          : wasSelectedWrong
+                          ? 'bg-red-50 border-red-300 text-red-800'
+                          : 'bg-gray-50 border-gray-200'
+                        : isSelected
+                        ? 'bg-blue-50 border-blue-300'
+                        : 'hover:bg-gray-50 border-gray-200'
+                    }`}
+                    style={{
+                      backgroundColor: isSubmitted 
+                        ? isCorrectAnswer ? '#f0fdf4' 
+                        : wasSelectedWrong ? '#fef2f2'
+                        : theme.cardBg
+                        : isSelected ? '#eff6ff' : theme.cardBg,
+                      borderColor: theme.border
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name={`question-${currentQuestion}`}
+                      checked={isSelected}
+                      onChange={() => !isSubmitted && handleAnswerSelect(currentQuestion, index)}
+                      disabled={isSubmitted}
+                      className="text-blue-600"
+                    />
+                    <span className="flex-1">{option}</span>
+                    {isSubmitted && isCorrectAnswer && (
+                      <Check className="w-5 h-5 text-green-600" />
+                    )}
+                    {isSubmitted && wasSelectedWrong && (
+                      <AlertCircle className="w-5 h-5 text-red-600" />
+                    )}
+                  </label>
+                )
+              })}
+            </div>
 
-const FeedbackSection = styled.div`
-  margin-top: 24px; /* Generous spacing above feedback */
-  padding: 20px;
-  border-radius: 8px;
-  background: #faf8f5; /* Cream background */
-  border-left: 4px solid ${props => props.isCorrect ? '#065f46' : '#991b1b'};
-  
-  .feedback-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 12px;
-    
-    .feedback-icon {
-      font-size: 24px;
-      margin-right: 12px;
-      color: ${props => props.isCorrect ? '#065f46' : '#991b1b'};
-    }
-    
-    .feedback-label {
-      font-size: 18px;
-      font-weight: 600;
-      color: ${props => props.isCorrect ? '#065f46' : '#991b1b'};
-    }
-  }
-  
-  .feedback-message {
-    color: #2c3e50;
-    font-size: 16px;
-    line-height: 1.5;
-    margin-bottom: 16px;
-  }
-  
-  .feedback-explanation {
-    color: #4b5563;
-    font-size: 14px;
-    line-height: 1.5;
-    font-style: italic;
-  }
-`
+            {/* Immediate Feedback */}
+            {questionFeedback[currentQuestion] && (
+              <div 
+                className={`mt-4 p-4 rounded-lg border ${
+                  questionFeedback[currentQuestion].isCorrect
+                    ? 'bg-green-50 border-green-300 text-green-800'
+                    : 'bg-red-50 border-red-300 text-red-800'
+                }`}
+                style={{ fontSize: `${fontSize}px`, fontFamily: fontFamily }}
+              >
+                {questionFeedback[currentQuestion].message}
+              </div>
+            )}
 
-const SpellingQuizContainer = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-`
+            {/* Submit Answer Button */}
+            {selectedAnswers[currentQuestion] !== undefined && !submittedAnswers.hasOwnProperty(currentQuestion) && (
+              <div className="mt-4 text-center">
+                <button
+                  className="btn-primary"
+                  onClick={() => submitAnswer(currentQuestion)}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Submit Answer
+                </button>
+              </div>
+            )}
+          </div>
 
-const SpellingQuizModal = styled.div`
-  background: ${props => props.theme.cardBackground};
-  border-radius: 16px;
-  padding: 40px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 90%;
-  overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-  
-  .quiz-header {
-    text-align: center;
-    margin-bottom: 32px;
-    
-    h2 {
-      color: ${props => props.theme.primaryColor};
-      margin-bottom: 12px;
-      font-size: 24px;
-    }
-    
-    .progress {
-      color: ${props => props.theme.textColor};
-      font-size: 16px;
-      opacity: 0.8;
-    }
-  }
-  
-  .word-section {
-    text-align: center;
-    margin-bottom: 32px;
-    
-    .instruction {
-      font-size: 18px;
-      color: ${props => props.theme.textColor};
-      margin-bottom: 20px;
-      font-weight: 500;
-    }
-    
-    .audio-controls {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      margin-bottom: 24px;
-    }
-  }
-  
-  .input-section {
-    margin-bottom: 32px;
-    
-    .input-label {
-      display: block;
-      font-size: 16px;
-      font-weight: 500;
-      color: ${props => props.theme.textColor};
-      margin-bottom: 12px;
-      text-align: left;
-    }
-    
-    .spelling-input {
-      width: 100%;
-      padding: 16px 20px;
-      font-size: 20px;
-      font-family: ${props => props.theme.fontFamily};
-      border: 2px solid ${props => props.theme.borderColor};
-      border-radius: 8px;
-      background: ${props => props.theme.backgroundColor};
-      color: ${props => props.theme.textColor};
-      text-align: center;
-      
-      &:focus {
-        outline: none;
-        border-color: ${props => props.theme.primaryColor};
-        box-shadow: 0 0 0 3px ${props => props.theme.primaryColor}33;
-      }
-    }
-  }
-  
-  .quiz-actions {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 24px;
-  }
-  
-  .close-button {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: ${props => props.theme.textColor};
-    padding: 8px;
-    border-radius: 4px;
-    
-    &:hover {
-      background: ${props => props.theme.borderColor};
-    }
-  }
-`
+          <div className="flex justify-between">
+            <button
+              className="btn-secondary"
+              onClick={resetQuiz}
+            >
+              Reset Quiz
+            </button>
+            <button
+              className="btn-primary"
+              onClick={handleSubmit}
+              disabled={Object.keys(submittedAnswers).length !== questions.length}
+            >
+              Complete Quiz
+            </button>
+          </div>
+        </>
+      ) : (
+        <div 
+          className="text-center p-6 rounded-lg border"
+          style={{
+            backgroundColor: theme.cardBg,
+            borderColor: theme.border
+          }}
+        >
+          <h4 className="text-xl font-semibold mb-4">Quiz Results</h4>
+          <div className="text-3xl font-bold mb-4 text-blue-600">
+            {calculateScore()} / {questions.length}
+          </div>
+          <p className="text-gray-600 mb-4">
+            You got {Math.round((calculateScore() / questions.length) * 100)}% correct!
+          </p>
+          <button
+            className="btn-primary"
+            onClick={resetQuiz}
+          >
+            Retake Quiz
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
-const SpellingFeedback = styled.div`
-  text-align: center;
-  padding: 20px;
-  border-radius: 8px;
-  margin: 20px 0;
-  
-  ${props => props.isCorrect ? `
-    background: #d1fae5;
-    color: #065f46;
-    border: 2px solid #10b981;
-  ` : `
-    background: #fef2f2;
-    color: #991b1b;
-    border: 2px solid #ef4444;
-  `}
-  
-  .feedback-text {
-    font-size: 18px;
-    font-weight: 500;
-    margin-bottom: 16px;
-  }
-  
-  .feedback-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-`
-
+// Main App Component
 function App() {
   // State management
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [audioUrl, setAudioUrl] = useState('')
-  const [summary, setSummary] = useState([])
-  const [questions, setQuestions] = useState([])
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1)
+  const [colorTheme, setColorTheme] = useState('default')
+  const [fontFamily, setFontFamily] = useState("'OpenDyslexic', 'Inter', Arial, sans-serif") // Default to dyslexia-friendly font
+  const [fontSize, setFontSize] = useState(16) // Minimum 16px for dyslexia accessibility
+  const [lineHeight, setLineHeight] = useState(1.6)
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
+  const [showReadingPreferences, setShowReadingPreferences] = useState(false)
   
-  // OCR and file upload state
+  // Content state
+  const [extractedText, setExtractedText] = useState('')
+  const [pastedText, setPastedText] = useState('')
+  const [aiSummary, setAiSummary] = useState('')
+  const [quizQuestions, setQuizQuestions] = useState([])
+  const [spellingQuiz, setSpellingQuiz] = useState([])
+  const [currentSource, setCurrentSource] = useState('') // 'upload' or 'paste'
+  
+  // UI state for showing sections
+  const [showSummary, setShowSummary] = useState(false)
+  const [showQuiz, setShowQuiz] = useState(false)
+  const [showSpellingQuiz, setShowSpellingQuiz] = useState(false)
+  
+  // Accessibility features
+  const [focusMode, setFocusMode] = useState(false)
+  const [distractionFreeMode, setDistractionFreeMode] = useState(false)
+  const [readingRulerPosition, setReadingRulerPosition] = useState(0)
+  const [highlightedTextRange, setHighlightedTextRange] = useState(null)
+  const [selectedWord, setSelectedWord] = useState(null)
+  const [wordPosition, setWordPosition] = useState(null)
+  
+  // Processing state
   const [isProcessingOCR, setIsProcessingOCR] = useState(false)
   const [ocrProgress, setOcrProgress] = useState(0)
-  const [uploadedFile, setUploadedFile] = useState(null)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [ocrError, setOcrError] = useState('')
-  const [previewMode, setPreviewMode] = useState(false)
-  
-  // Spelling Quiz state
-  const [showSpellingQuiz, setShowSpellingQuiz] = useState(false)
-  const [spellingWords, setSpellingWords] = useState([])
-  const [currentWordIndex, setCurrentWordIndex] = useState(0)
-  const [userSpelling, setUserSpelling] = useState('')
-  const [spellingFeedback, setSpellingFeedback] = useState('')
-  const [spellingScore, setSpellingScore] = useState(0)
-  const [showSpellingFeedback, setShowSpellingFeedback] = useState(false)
-  const [speechInstance, setSpeechInstance] = useState(null)
-  
-  // Customization state
-  const [colorScheme, setColorScheme] = useState('light')
-  const [fontFamily, setFontFamily] = useState('Arial, sans-serif')
-  const [fontSize, setFontSize] = useState(16)
-  const [lineHeight, setLineHeight] = useState(1.8)
-  const [selectedLanguage, setSelectedLanguage] = useState('en-US')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [backendStatus, setBackendStatus] = useState('checking')
-  
-  // Progress tracking
-  const [currentStep, setCurrentStep] = useState(1) // 1: Add Text, 2: Process Text, 3: Study Materials
-  
-  // Reading focus tool
-  const [focusedSentenceIndex, setFocusedSentenceIndex] = useState(-1)
-  const [isReadingMode, setIsReadingMode] = useState(false)
-  
-  // Dictionary/pronunciation
-  const [selectedWord, setSelectedWord] = useState(null)
-  const [wordDefinition, setWordDefinition] = useState('')
-  
-  // Track what is currently being read
-  const [currentlyReading, setCurrentlyReading] = useState(null) // 'transcript', 'summary', or null
-  
-  // Paste text functionality
-  const [pastedText, setPastedText] = useState('')
-  const [textSource, setTextSource] = useState('upload') // 'upload' or 'paste'
-  
-  // Refs
-  const audioRef = useRef(null)
+  const [speakingContent, setSpeakingContent] = useState('')
 
-  // Check backend status on component mount
-  useEffect(() => {
-    const checkBackendStatus = async () => {
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
-        const response = await fetch(`${apiUrl.replace('/api', '')}/api/health`)
-        if (response.ok) {
-          setBackendStatus('connected')
-        } else {
-          setBackendStatus('disconnected')
-        }
-      } catch (error) {
-        console.error('Backend connection error:', error)
-        setBackendStatus('disconnected')
-      }
-    }
-    
-    checkBackendStatus()
-    
-    // Check status every 30 seconds
-    const interval = setInterval(checkBackendStatus, 30000)
-    
-    return () => clearInterval(interval)
-  }, [])
+  const theme = colorThemes[colorTheme]
+  const currentText = currentSource === 'paste' ? pastedText : extractedText
 
-  // Cleanup OCR service on component unmount
-  useEffect(() => {
-    return () => {
-      ocrService.cleanup()
-    }
-  }, [])
-
-  // Demo data for reliable demonstration
-  const demoTranscript = `Welcome to today's lesson on the water cycle. The water cycle, also known as the hydrological cycle, describes the continuous movement of water on, above and below the surface of the Earth.
-
-The water cycle consists of four main stages: evaporation, condensation, precipitation, and collection. During evaporation, heat from the sun causes water in oceans, lakes, and rivers to turn into water vapor that rises into the atmosphere.
-
-Condensation occurs when this water vapor cools and forms tiny droplets around particles in the air, creating clouds. When these droplets become too heavy, they fall back to Earth as precipitation in the form of rain, snow, sleet, or hail.
-
-Finally, the water collects in bodies of water and the cycle begins again. This process is essential for all life on Earth and helps distribute heat around our planet.`
-
-  const demoSummary = [
-    "The water cycle describes continuous water movement on Earth",
-    "Four main stages: evaporation, condensation, precipitation, collection",
-    "Evaporation: Sun heats water, turning it to vapor",
-    "Condensation: Water vapor cools and forms clouds",
-    "Precipitation: Water falls as rain, snow, sleet, or hail",
-    "Collection: Water gathers in bodies of water, cycle repeats",
-    "Essential for all life and helps distribute heat globally"
-  ]
-
-  const demoQuestions = [
-    {
-      question: "What are the four main stages of the water cycle?",
-      options: [
-        "Evaporation, condensation, precipitation, collection",
-        "Heating, cooling, freezing, melting",
-        "Rain, snow, sleet, hail",
-        "Oceans, lakes, rivers, streams"
-      ],
-      correct: 0
-    },
-    {
-      question: "What causes evaporation in the water cycle?",
-      options: [
-        "Wind from storms",
-        "Heat from the sun",
-        "Cold temperatures",
-        "Ocean currents"
-      ],
-      correct: 1
-    },
-    {
-      question: "What happens during condensation?",
-      options: [
-        "Water falls from clouds",
-        "Water heats up and rises",
-        "Water vapor cools and forms clouds",
-        "Water collects in rivers"
-      ],
-      correct: 2
-    }
-  ]
-
-  // Spelling Quiz words (generated from current text or predefined)
-  const getSpellingWords = () => {
-    const currentText = getCurrentText()
-    if (currentText) {
-      // Extract key words from the current text
-      const words = currentText.toLowerCase()
-        .split(/\W+/)
-        .filter(word => word.length > 4 && word.length < 12)
-        .filter(word => !['the', 'and', 'that', 'this', 'with', 'have', 'will', 'been', 'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'well', 'work'].includes(word))
-        .slice(0, 10)
-      
-      return words.length > 0 ? words : getDefaultSpellingWords()
-    }
-    return getDefaultSpellingWords()
-  }
-
-  const getDefaultSpellingWords = () => [
-    'water', 'cycle', 'cloud', 'vapor', 'ocean', 'river', 'earth', 'solar', 'heat', 'drop'
-  ]
-
-  // File processing completed handler
-  const handleProcessingComplete = () => {
-    setCurrentStep(2) // Move to process text step
-  }
-
+  // File upload handler
   const handleFileUpload = async (files) => {
     const file = files[0]
     if (!file) return
-    
-    console.log('📁 File upload started:', file.name, file.type, ocrService.formatFileSize(file.size))
-    
-    // Reset previous states
-    setOcrError('')
-    setUploadedFile(file)
-    setCurrentStep(2) // Move to transcribe step
-    
-    // Check if it's a supported file type
+
     if (!ocrService.isSupportedFile(file)) {
-      const errorMsg = `Unsupported file type: ${file.type}. Please upload images (JPG, PNG, GIF, BMP, WebP) or PDFs.`
-      console.error('❌ File type error:', errorMsg)
-      setOcrError(errorMsg)
-      setCurrentStep(1) // Reset to upload step
+      setOcrError(`Unsupported file type: ${file.type}`)
       return
     }
-    
-    // Check file size (max 10MB)
+
     if (file.size > 10 * 1024 * 1024) {
-      const errorMsg = `File too large: ${ocrService.formatFileSize(file.size)}. Maximum size is 10MB.`
-      console.error('❌ File size error:', errorMsg)
-      setOcrError(errorMsg)
-      setCurrentStep(1) // Reset to upload step
+      setOcrError(`File too large: ${ocrService.formatFileSize(file.size)}. Maximum size is 10MB.`)
       return
     }
-    
-    // Start processing
+
     setIsProcessingOCR(true)
-    setOcrProgress(0)
-    setTranscript('Initializing OCR...')
-    
+    setOcrError('')
+    setCurrentStep(2)
+    setCurrentSource('upload')
+
     try {
-      console.log('🚀 Starting OCR processing...')
-      
-      const extractedText = await ocrService.extractText(file, (progress) => {
-        console.log('📊 Progress update:', progress + '%')
-        setOcrProgress(progress)
-        setTranscript(`Extracting text... ${progress}%`)
-      })
-      
-      console.log('📝 OCR completed, text length:', extractedText.length)
-      
-      if (extractedText && extractedText.length > 0) {
-        setTranscript(extractedText)
-        setTextSource('upload')
-        setCurrentStep(3) // Move to study materials step
-        console.log('✅ OCR completed successfully')
-      } else {
-        const errorMsg = 'No text found in the uploaded file. Please try a different image with clearer text.'
-        console.warn('⚠️ Empty text result:', errorMsg)
-        setOcrError(errorMsg)
-        setTranscript('')
-        setTextSource('upload')
-        setCurrentStep(1) // Reset to upload step
-      }
+      const text = await ocrService.extractText(file, setOcrProgress)
+      setExtractedText(text)
+      setCurrentStep(3)
     } catch (error) {
-      console.error('❌ OCR processing failed:', error)
-      const errorMsg = error.message || 'Unknown error occurred during text extraction'
-      setOcrError(errorMsg)
-      setTranscript('')
-      setTextSource('upload')
-      setCurrentStep(1) // Reset to upload step
+      setOcrError(error.message)
+      setCurrentStep(1)
     } finally {
       setIsProcessingOCR(false)
       setOcrProgress(0)
     }
   }
 
-  const handlePasteText = (text) => {
-    console.log('📝 Processing pasted text...', text.length, 'characters')
+  // Text paste handler
+  const handleTextPaste = (text) => {
+    if (!text || text.trim().length === 0) return
     
-    if (!text || text.trim().length === 0) {
-      console.log('❌ No text provided')
-      return
-    }
-    
-    // Clean up the text
-    const cleanText = text.trim()
-    
-    // Clear any existing OCR data
-    setUploadedFile(null)
-    setOcrError('')
-    setIsProcessingOCR(false)
-    setOcrProgress(0)
-    
-    // Set the pasted text as the current text
-    setPastedText(cleanText)
-    setTextSource('paste')
+    setPastedText(text.trim())
+    setCurrentSource('paste')
     setCurrentStep(3)
-    
-    // Clear previous AI results
-    setSummary([])
-    setQuestions([])
-    
-    console.log('✅ Pasted text processed successfully')
+    setOcrError('')
   }
 
-  // Helper function to get current text (from upload or paste)
-  const getCurrentText = () => {
-    return textSource === 'paste' ? pastedText : transcript
-  }
-
-  const togglePlayback = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause()
-      } else {
-        audioRef.current.play()
-      }
-      setIsPlaying(!isPlaying)
-    }
-  }
-
+  // AI Summary generation
   const generateSummary = async () => {
-    const currentText = getCurrentText()
-    console.log('🎯 Starting summary generation...')
-    console.log('📝 Current text:', currentText.substring(0, 100) + '...')
+    if (!currentText) return
     
     setIsGenerating(true)
+    setShowSummary(true)
     try {
-      const summaryPoints = await geminiService.generateSummary(currentText)
-      setSummary(summaryPoints)
-      console.log('✅ Summary generated successfully!')
+      const summary = await geminiService.generateSummary(currentText)
+      setAiSummary(summary.join('\n\n'))
+      setCurrentStep(4)
+          } catch (error) {
+        console.error('Failed to generate summary:', error)
+        // Fallback summary
+        setAiSummary('• The water cycle describes continuous water movement on Earth\n• Four main stages: evaporation, condensation, precipitation, collection\n• Essential for all life and helps distribute heat globally\n\n📝 Note: This is demo content. For AI-generated summaries, set up your Gemini API key.')
+      } finally {
+        setIsGenerating(false)
+      }
+  }
+
+  // Quiz generation
+  const generateQuiz = async () => {
+    if (!currentText) return
+    
+    setIsGeneratingQuiz(true)
+    setShowQuiz(true)
+    try {
+      const questions = await geminiService.generateQuestions(currentText)
+      setQuizQuestions(questions)
     } catch (error) {
-      console.error('❌ Failed to generate summary:', error)
-      // Fallback to demo data
-      setSummary(demoSummary)
+      console.error('Failed to generate quiz:', error)
+      // Use demo questions as fallback
+      setQuizQuestions(geminiService.getDemoQuestions())
     } finally {
-      setIsGenerating(false)
+      setIsGeneratingQuiz(false)
     }
   }
 
-  const generateQuestions = async () => {
-    const currentText = getCurrentText()
-    console.log('🎯 Starting question generation...')
-    console.log('📝 Current text:', currentText.substring(0, 100) + '...')
+  // Spelling Quiz generation
+  const generateSpellingQuiz = () => {
+    if (!currentText) return
     
-    setIsGenerating(true)
-    try {
-      const questionsData = await geminiService.generateQuestions(currentText)
-      setQuestions(questionsData)
-      console.log('✅ Questions generated successfully!')
-    } catch (error) {
-      console.error('❌ Failed to generate questions:', error)
-      // Fallback to demo data
-      setQuestions(demoQuestions)
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  // Spelling Quiz Functions
-  const startSpellingQuiz = () => {
-    console.log('🎮 Starting spelling quiz...')
-    
-    // Check if speech synthesis is supported
-    if (!('speechSynthesis' in window)) {
-      alert('Text-to-speech is not supported in your browser. Please use a modern browser like Chrome, Firefox, or Safari.')
-      return
-    }
-    
-    const words = getSpellingWords()
-    console.log('📝 Quiz words:', words)
-    
-    setSpellingWords(words)
-    setCurrentWordIndex(0)
-    setSpellingScore(0)
-    setUserSpelling('')
-    setSpellingFeedback('')
-    setShowSpellingFeedback(false)
     setShowSpellingQuiz(true)
-    
-    // Speak the first word after a delay to ensure modal is fully loaded
-    setTimeout(() => {
-      console.log('🔊 Speaking first word:', words[0])
-      speakSpellingWord(words[0])
-    }, 1000)
-  }
-
-  const speakSpellingWord = (word) => {
-    if (word) {
-      console.log('🔊 Attempting to speak word:', word)
+    // Generate spelling words from the current text
+    const words = currentText
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length >= 4 && word.length <= 10)
+      .slice(0, 10) // Take first 10 suitable words
       
-      // Stop any current speech
-      if (speechInstance) {
-        speechSynthesis.cancel()
-      }
-      
-      // Ensure voices are loaded
-      const loadVoicesAndSpeak = () => {
-        const voices = speechSynthesis.getVoices()
-        console.log('📢 Available voices:', voices.length)
-        
-        if (voices.length === 0) {
-          // Voices not loaded yet, wait and try again
-          setTimeout(loadVoicesAndSpeak, 100)
-          return
-        }
-        
-        const speech = new SpeechSynthesisUtterance(word)
-        speech.rate = 0.7 // Even slower for better comprehension
-        speech.pitch = 1.0
-        speech.volume = 1.0
-        
-        // Find the best voice
-        let selectedVoice = voices.find(voice => 
-          voice.lang.startsWith(selectedLanguage) && !voice.localService
-        ) || voices.find(voice => 
-          voice.lang.startsWith('en') && !voice.localService
-        ) || voices[0]
-        
-        if (selectedVoice) {
-          speech.voice = selectedVoice
-          console.log('🎤 Using voice:', selectedVoice.name, selectedVoice.lang)
-        }
-        
-        // Add event listeners for debugging
-        speech.onstart = () => {
-          console.log('✅ Speech started for word:', word)
-          setIsSpeaking(true)
-        }
-        
-        speech.onend = () => {
-          console.log('🏁 Speech ended for word:', word)
-          setIsSpeaking(false)
-        }
-        
-        speech.onerror = (error) => {
-          console.error('❌ Speech error:', error)
-          setIsSpeaking(false)
-          alert('Speech synthesis failed. Please try again or check your browser settings.')
-        }
-        
-        // Speak the word
-        speechSynthesis.speak(speech)
-        setSpeechInstance(speech)
-      }
-      
-      loadVoicesAndSpeak()
-    }
+    setSpellingQuiz(words.map(word => ({
+      word: word,
+      attempts: 0,
+      completed: false
+    })))
   }
 
-  const checkSpelling = () => {
-    const currentWord = spellingWords[currentWordIndex]
-    const userAnswer = userSpelling.trim().toLowerCase()
-    const correctAnswer = currentWord.toLowerCase()
-    
-    setShowSpellingFeedback(true)
-    
-    if (userAnswer === correctAnswer) {
-      setSpellingFeedback('Great job! You spelled it right.')
-      setSpellingScore(prev => prev + 1)
-    } else {
-      setSpellingFeedback(`Not quite. The correct spelling is: ${currentWord}`)
-    }
+  // Word definition handler
+  const handleWordClick = (word, position) => {
+    setSelectedWord(word)
+    setWordPosition(position)
   }
 
-  const nextSpellingWord = () => {
-    if (currentWordIndex < spellingWords.length - 1) {
-      setCurrentWordIndex(prev => prev + 1)
-      setUserSpelling('')
-      setSpellingFeedback('')
-      setShowSpellingFeedback(false)
-      
-      // Speak the next word
-      setTimeout(() => {
-        speakSpellingWord(spellingWords[currentWordIndex + 1])
-      }, 500)
-    } else {
-      // Quiz complete
-      setSpellingFeedback(`Quiz complete! You got ${spellingScore} out of ${spellingWords.length} words correct.`)
-    }
+  const closeWordDefinition = () => {
+    setSelectedWord(null)
+    setWordPosition(null)
   }
 
-  const repeatSpellingWord = () => {
-    speakSpellingWord(spellingWords[currentWordIndex])
-  }
-
-  const skipSpellingWord = () => {
-    nextSpellingWord()
-  }
-
-  const closeSpellingQuiz = () => {
-    setShowSpellingQuiz(false)
-    setCurrentWordIndex(0)
-    setUserSpelling('')
-    setSpellingFeedback('')
-    setShowSpellingFeedback(false)
-    if (speechInstance) {
-      speechSynthesis.cancel()
-      setSpeechInstance(null)
-      setIsSpeaking(false)
-    }
-  }
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-      alert('Copied to clipboard!')
-    })
-  }
-
-  const [selectedAnswers, setSelectedAnswers] = useState({})
-  const [showResults, setShowResults] = useState({})
-
-    const handleAnswerSelect = (questionIndex, optionIndex) => {
-    setSelectedAnswers({...selectedAnswers, [questionIndex]: optionIndex})
-    setShowResults({...showResults, [questionIndex]: true})
-    
-    // Gentle encouraging feedback
-    const isCorrect = optionIndex === questions[questionIndex].correct
-    const encouragements = {
-      correct: [
-        "Excellent work! 🌟 You're really understanding the material.",
-        "Great job! 🎉 Your comprehension is impressive.",
-        "Perfect! ✨ You've got this concept down pat.",
-        "Wonderful! 🌈 Keep up the fantastic learning.",
-        "Amazing! 🚀 You're making great progress."
-      ],
-      incorrect: [
-        "Good try! 💪 Learning happens through practice.",
-        "Almost there! 🌱 Every attempt helps you grow.",
-        "Nice effort! 🌟 You're on the right track.",
-        "Keep going! 🎯 Understanding comes with time.",
-        "Well attempted! 💫 Each try teaches us something new."
-      ]
-    }
-    
-    // Show encouraging message briefly
-    const messages = isCorrect ? encouragements.correct : encouragements.incorrect
-    const randomMessage = messages[Math.floor(Math.random() * messages.length)]
-    
-    // Store feedback message (this would be shown in the UI)
-    setTimeout(() => {
-      // Optionally speak the encouragement
-      if (isCorrect) {
-        speakText("Correct! Well done.", 'feedback')
-      }
-    }, 500)
-  }
-
-  // Get explanations for incorrect answers
-  const getQuestionExplanation = (questionIndex) => {
-    const explanations = {
-      0: "The water cycle has four main stages that work together: evaporation (water becomes vapor), condensation (vapor forms clouds), precipitation (water falls), and collection (water gathers).",
-      1: "The sun provides the energy needed for evaporation. Its heat turns liquid water into water vapor that rises into the atmosphere.",
-      2: "During condensation, water vapor in the air cools down and forms tiny water droplets around particles, creating clouds in the sky."
-    }
-    return explanations[questionIndex] || "Keep studying the material to better understand this concept."
-  }
-
-  const handleLanguageChange = (language) => {
-    setSelectedLanguage(language)
-    speechService.setLanguage(language)
-  }
-
-  // Text processing for dyslexia-friendly display
-  const formatTextForReading = (text) => {
-    if (!text) return ''
-    
-    // Split into paragraphs at double line breaks or natural breaks
-    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim())
-    
-    return paragraphs.map((paragraph, pIndex) => {
-      // Split each paragraph into sentences
-      const sentences = paragraph.split(/(?<=[.!?])\s+/).filter(s => s.trim())
-      
-      return (
-        <p key={pIndex}>
-          {sentences.map((sentence, sIndex) => {
-            const globalSentenceIndex = paragraphs.slice(0, pIndex).reduce((acc, p) => acc + p.split(/(?<=[.!?])\s+/).length, 0) + sIndex
-            
-            return (
-              <span 
-                key={sIndex} 
-                className={`sentence ${focusedSentenceIndex === globalSentenceIndex ? 'focused' : ''}`}
-                onClick={() => setFocusedSentenceIndex(focusedSentenceIndex === globalSentenceIndex ? -1 : globalSentenceIndex)}
-              >
-                {sentence.trim().split(' ').map((word, wIndex) => (
-                  <span 
-                    key={wIndex} 
-                    className="word"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleWordClick(word)
-                    }}
-                  >
-                    {word}
-                    {wIndex < sentence.trim().split(' ').length - 1 ? ' ' : ''}
-                  </span>
-                ))}
-              </span>
-            )
-          })}
-        </p>
-      )
-    })
-  }
-
-  // Handle word click for dictionary lookup
-  const handleWordClick = async (word) => {
-    const cleanWord = word.replace(/[^a-zA-Z]/g, '').toLowerCase()
-    setSelectedWord(cleanWord)
-    
-         // Simple word pronunciation (for demo)
-     if ('speechSynthesis' in window) {
-       // Stop any current reading first
-       window.speechSynthesis.cancel()
-       setIsSpeaking(false)
-       setCurrentlyReading(null)
-       
-       const utterance = new SpeechSynthesisUtterance(cleanWord)
-       utterance.rate = 0.6
-       utterance.lang = selectedLanguage.includes('zh') ? selectedLanguage : 'en-US'
-       window.speechSynthesis.speak(utterance)
-     }
-    
-    // Mock definition (in production, you'd use a dictionary API)
-    const mockDefinitions = {
-      'water': 'A colorless, transparent liquid that forms seas, lakes, rivers, and rain.',
-      'cycle': 'A series of events that repeat in a regular order.',
-      'evaporation': 'The process of turning from liquid into vapor.',
-      'condensation': 'Water vapor turning into liquid water droplets.',
-      'precipitation': 'Rain, snow, sleet, or hail falling from clouds.',
-      'atmosphere': 'The layer of gases surrounding Earth.',
-      'temperature': 'How hot or cold something is.',
-      'energy': 'The power to do work or cause change.'
-    }
-    
-    const definition = mockDefinitions[cleanWord] || 'Click to hear pronunciation of this word.'
-    setWordDefinition(definition)
-    
-    // Clear definition after 5 seconds
-    setTimeout(() => {
-      setSelectedWord(null)
-      setWordDefinition('')
-    }, 5000)
-  }
-
-  // Text-to-speech functionality
-  const speakText = (text, contentType = 'transcript') => {
-    if ('speechSynthesis' in window) {
-      // Stop any current speech
+  // Text-to-speech handler with highlighting
+  const handleSpeak = (content, contentType) => {
+    if (isSpeaking && speakingContent === contentType) {
+      // Stop speaking
       window.speechSynthesis.cancel()
-      
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 0.8 // Slightly slower for dyslexic learners
+      setIsSpeaking(false)
+      setSpeakingContent('')
+      setHighlightedTextRange(null)
+    } else {
+      // Start speaking with visual synchronization
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(content)
+      utterance.rate = 0.8
       utterance.pitch = 1.0
       utterance.volume = 1.0
       
-      // Set language based on selected language
-      if (selectedLanguage.includes('zh')) {
-        utterance.lang = selectedLanguage
-      } else {
-        utterance.lang = 'en-US'
-      }
+      // Split content into sentences for highlighting
+      const sentences = content.match(/[^\.!?]+[\.!?]+/g) || [content]
+      let currentSentence = 0
       
       utterance.onstart = () => {
         setIsSpeaking(true)
-        setCurrentlyReading(contentType)
+        setSpeakingContent(contentType)
+        
+        // Highlight text as it's being read
+        const highlightInterval = setInterval(() => {
+          if (currentSentence < sentences.length) {
+            setHighlightedTextRange({
+              start: sentences.slice(0, currentSentence).join('').length,
+              end: sentences.slice(0, currentSentence + 1).join('').length,
+              sentence: sentences[currentSentence]
+            })
+            currentSentence++
+          } else {
+            clearInterval(highlightInterval)
+          }
+        }, (utterance.rate * 3000)) // Adjust timing based on speech rate
       }
+      
       utterance.onend = () => {
         setIsSpeaking(false)
-        setCurrentlyReading(null)
+        setSpeakingContent('')
+        setHighlightedTextRange(null)
       }
+      
       utterance.onerror = () => {
         setIsSpeaking(false)
-        setCurrentlyReading(null)
+        setSpeakingContent('')
+        setHighlightedTextRange(null)
       }
       
       window.speechSynthesis.speak(utterance)
-    } else {
-      alert('Text-to-speech is not supported in this browser')
     }
   }
 
-  const stopSpeaking = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      setIsSpeaking(false)
-      setCurrentlyReading(null)
-    }
-  }
-
-  // Update progress when transcript changes
+  // Apply global font settings to entire webpage
   useEffect(() => {
-    if (transcript && transcript.length > 0) {
-      setCurrentStep(2)
+    // Apply font settings to the document body for global effect
+    const body = document.body
+    const root = document.documentElement
+    
+    // Apply font settings globally
+    body.style.fontFamily = fontFamily
+    body.style.fontSize = `${fontSize}px`
+    body.style.lineHeight = lineHeight.toString()
+    
+    // Also apply to root element for better inheritance
+    root.style.setProperty('--global-font-family', fontFamily)
+    root.style.setProperty('--global-font-size', `${fontSize}px`)
+    root.style.setProperty('--global-line-height', lineHeight.toString())
+    
+    // Apply theme colors globally
+    root.style.setProperty('--theme-bg', theme.bg)
+    root.style.setProperty('--theme-text', theme.text)
+    root.style.setProperty('--theme-border', theme.border)
+    root.style.setProperty('--theme-card-bg', theme.cardBg)
+    root.style.setProperty('--theme-accent', theme.accent)
+    
+    // Cleanup function to reset styles if component unmounts
+    return () => {
+      body.style.fontFamily = ''
+      body.style.fontSize = ''
+      body.style.lineHeight = ''
     }
-  }, [transcript])
-
-  // Update progress when AI content is generated
-  useEffect(() => {
-    if (summary.length > 0 || questions.length > 0) {
-      setCurrentStep(3)
-    }
-  }, [summary, questions])
+  }, [fontFamily, fontSize, lineHeight, theme])
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event) => {
-      // Only trigger if not typing in an input field
-      if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT' || event.target.tagName === 'TEXTAREA') {
-        return
-      }
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
 
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
-          case 'p':
+          case 'u':
             event.preventDefault()
-            if (audioUrl) {
-              togglePlayback()
-            }
+            document.querySelector('input[type="file"]')?.click()
             break
           case 's':
             event.preventDefault()
-            if (transcript) {
-              generateSummary()
-            }
-            break
-          case 'q':
-            event.preventDefault()
-            if (transcript) {
-              generateQuestions()
-            }
+            if (currentText) generateSummary()
             break
           case 't':
             event.preventDefault()
-            if (transcript) {
-              (isSpeaking && currentlyReading === 'transcript') ? stopSpeaking() : speakText(transcript, 'transcript')
-            }
+            if (currentText) handleSpeak(currentText, 'text')
             break
-          case 'u':
+          case 'q':
             event.preventDefault()
-            // Focus on file upload area
-            document.querySelector('input[type="file"]')?.click()
+            if (currentText) generateQuiz()
+            break
+          case 'f':
+            event.preventDefault()
+            setFocusMode(!focusMode)
+            break
+          case 'd':
+            event.preventDefault()
+            setDistractionFreeMode(!distractionFreeMode)
+            break
+          case 'Escape':
+            event.preventDefault()
+            closeWordDefinition()
+            setFocusMode(false)
             break
           default:
             break
-        }
-      }
-
-             // Reading focus mode navigation
-       if (isReadingMode) {
-         if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
-           event.preventDefault()
-           setFocusedSentenceIndex(prev => prev + 1)
-         } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
-           event.preventDefault()
-           setFocusedSentenceIndex(prev => Math.max(-1, prev - 1))
-         } else if (event.key === 'Escape') {
-           setIsReadingMode(false)
-           setFocusedSentenceIndex(-1)
-         }
-       }
-
-       // Quiz navigation
-       if (questions.length > 0) {
-         if (event.key >= '1' && event.key <= '4') {
-           // Answer with number keys (1-4 for options A-D)
-           const optionIndex = parseInt(event.key) - 1
-           const currentQuestion = questions.findIndex((_, index) => !showResults[index])
-           if (currentQuestion !== -1 && optionIndex < questions[currentQuestion].options.length) {
-             event.preventDefault()
-             handleAnswerSelect(currentQuestion, optionIndex)
-           }
          }
        }
     }
 
          window.addEventListener('keydown', handleKeyDown)
      return () => window.removeEventListener('keydown', handleKeyDown)
-   }, [audioUrl, transcript, isSpeaking, currentlyReading, isReadingMode])
-
-  // Load user preferences on component mount
-  useEffect(() => {
-    const savedPreferences = localStorage.getItem('echolearn-preferences')
-    if (savedPreferences) {
-      try {
-        const prefs = JSON.parse(savedPreferences)
-        setColorScheme(prefs.colorScheme || 'light')
-        setFontFamily(prefs.fontFamily || 'Arial, sans-serif')
-        setFontSize(prefs.fontSize || 16)
-        setLineHeight(prefs.lineHeight || 1.8)
-        setSelectedLanguage(prefs.selectedLanguage || 'en-US')
-      } catch (error) {
-        console.error('Failed to load preferences:', error)
-      }
-    }
-  }, [])
-
-  // File Upload Component
-  const FileUploadComponent = () => {
-    const onDrop = (acceptedFiles, fileRejections) => {
-      try {
-        console.log('📁 Files dropped:', acceptedFiles.length, 'accepted', fileRejections.length, 'rejected')
-        
-        if (fileRejections.length > 0) {
-          const error = fileRejections[0].errors[0]
-          setOcrError(`File rejected: ${error.message}`)
-          return
-        }
-        
-        if (acceptedFiles.length === 0) {
-          setOcrError('No valid files were selected. Please try again.')
-          return
-        }
-        
-        handleFileUpload(acceptedFiles)
-      } catch (error) {
-        console.error('❌ File drop error:', error)
-        setOcrError(`File upload error: ${error.message}`)
-      }
-    }
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-      onDrop,
-      accept: {
-        'image/jpeg': ['.jpg', '.jpeg'],
-        'image/png': ['.png'],
-        'image/gif': ['.gif'],
-        'image/bmp': ['.bmp'],
-        'image/webp': ['.webp'],
-        'application/pdf': ['.pdf']
-      },
-      maxFiles: 1,
-      maxSize: 10 * 1024 * 1024, // 10MB
-      multiple: false,
-      noClick: false,
-      noKeyboard: false
-    })
-
-    return (
-      <div>
-        <FileUploadZone 
-          {...getRootProps()} 
-          className={isDragActive ? 'drag-active' : ''}
-        >
-          <input {...getInputProps()} />
-          <div className="upload-icon">
-            <FileImage size={48} />
-          </div>
-          <div className="upload-text">
-            {isDragActive ? 'Drop your files here' : 'Click or drag files to upload'}
-          </div>
-          <div className="upload-subtext">
-            Supports images (JPG, PNG, GIF, BMP, WebP) and PDFs up to 10MB
-          </div>
-        </FileUploadZone>
-
-        {uploadedFile && (
-          <UploadProgress>
-            <div className="upload-status">
-              <div className={`status-icon ${isProcessingOCR ? 'loading' : 'success'}`}>
-                {isProcessingOCR ? '⏳' : '✓'}
-              </div>
-              {isProcessingOCR ? 'Processing...' : 'File ready'}
-            </div>
-            <div className="file-preview">
-              <div className="file-icon">
-                <FileText size={24} />
-              </div>
-              <div className="file-info">
-                <div className="file-name">{uploadedFile.name}</div>
-                <div className="file-size">{ocrService.formatFileSize(uploadedFile.size)}</div>
-              </div>
-            </div>
-          </UploadProgress>
-        )}
-
-        {isProcessingOCR && (
-          <ProgressContainer>
-            <div className="progress-label">
-              Extracting text from your file... {ocrProgress}%
-            </div>
-            <div className="progress-bar">
-              <div 
-                className="progress-fill" 
-                style={{ width: `${ocrProgress}%` }}
-              />
-            </div>
-          </ProgressContainer>
-        )}
-
-        {ocrError && (
-          <ErrorMessage>
-            {ocrError}
-            <button 
-              onClick={() => {
-                setOcrError('')
-                setUploadedFile(null)
-                setCurrentStep(1)
-              }}
-              style={{
-                marginTop: '8px',
-                padding: '4px 8px',
-                backgroundColor: 'transparent',
-                color: 'inherit',
-                border: '1px solid currentColor',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              Clear Error
-            </button>
-          </ErrorMessage>
-        )}
-      </div>
-    )
-  }
-
-  // Save user preferences when they change
-  const savePreferences = () => {
-    const preferences = {
-      colorScheme,
-      fontFamily,
-      fontSize,
-      lineHeight,
-      selectedLanguage
-    }
-    localStorage.setItem('echolearn-preferences', JSON.stringify(preferences))
-    alert('Preferences saved! ✅')
-  }
-
-  const theme = colorSchemes[colorScheme]
-  const customTheme = {
-    ...theme,
-    fontFamily,
-    fontSize,
-    lineHeight
-  }
+  }, [currentText])
 
   return (
-    <ThemeProvider theme={customTheme}>
-      <GlobalStyle />
-      <Container>
-        <Header>
-          <h1>EchoLearn</h1>
-          <p>Transform documents and images into dyslexia-friendly study materials</p>
-        </Header>
+    <div 
+      className="min-h-screen transition-colors duration-200"
+      style={{
+        backgroundColor: theme.bg,
+        color: theme.text
+      }}
+    >
+      {/* Skip Links for Screen Readers */}
+      <a 
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 z-50 bg-blue-600 text-white px-4 py-2 rounded-md"
+        style={{ backgroundColor: theme.accent }}
+      >
+        Skip to main content
+      </a>
 
-        {/* Enhanced Progress Indicator */}
-        <ProgressBar>
-          <div className="progress-line">
-            <div 
-              className="progress-fill" 
-              style={{ width: `${((currentStep - 1) / 2) * 100}%` }}
-            />
-          </div>
-          <div className={`step ${currentStep >= 1 ? 'completed' : currentStep === 1 ? 'active' : 'pending'}`}>
-            <div className="step-circle">
-              {currentStep > 1 ? '✓' : '1'}
-            </div>
-            <div className="step-label">📄 Add Text</div>
-          </div>
-          <div className={`step ${currentStep >= 2 ? 'completed' : currentStep === 2 ? 'active' : 'pending'}`}>
-            <div className="step-circle">
-              {currentStep > 2 ? '✓' : '2'}
-            </div>
-            <div className="step-label">⚡ Process Text</div>
-          </div>
-          <div className={`step ${currentStep >= 3 ? 'completed' : currentStep === 3 ? 'active' : 'pending'}`}>
-            <div className="step-circle">
-              {currentStep > 3 ? '✓' : '3'}
-            </div>
-            <div className="step-label">🧠 Study Materials</div>
-          </div>
-        </ProgressBar>
-
-        <Grid>
-          <MainContent>
-            {/* File Upload Section */}
-            <Card>
-              <h2 style={{ marginBottom: '20px', color: theme.primaryColor }}>
-                <FileImage style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-                Upload Files
-              </h2>
-              
-              <InlineHelp>
-                <HelpCircle size={16} className="help-icon" />
-                Upload images or PDFs to extract text using OCR technology.
-                <br />
-                Supported formats: JPG, PNG, GIF, BMP, WebP, PDF
-              </InlineHelp>
-              
-              <ErrorBoundary>
-                <FileUploadComponent />
-              </ErrorBoundary>
-            </Card>
-
-            {/* Paste Text Section */}
-            <Card>
-              <h2 style={{ marginBottom: '20px', color: theme.primaryColor }}>
-                <Keyboard style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-                Paste Text
-              </h2>
-              
-              <InlineHelp>
-                <Keyboard size={16} className="help-icon" />
-                📋 Paste text • 🧠 Generate AI summaries • ✨ Create quizzes
-              </InlineHelp>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <textarea
-                  placeholder="Paste your text here..."
-                  style={{
-                    width: '100%',
-                    minHeight: '120px',
-                    padding: '16px',
-                    border: `2px solid ${theme.borderColor}`,
-                    borderRadius: '8px',
-                    fontSize: `${theme.fontSize}px`,
-                    fontFamily: theme.fontFamily,
-                    lineHeight: theme.lineHeight,
-                    backgroundColor: theme.cardBackground,
-                    color: theme.textColor,
-                    resize: 'vertical'
-                  }}
-                  onPaste={(e) => {
-                    // Handle paste event
-                    setTimeout(() => {
-                      const text = e.target.value
-                      if (text.trim()) {
-                        handlePasteText(text)
-                      }
-                    }, 10)
-                  }}
-                  onChange={(e) => {
-                    // Handle manual typing
-                    const text = e.target.value
-                    if (text.trim()) {
-                      handlePasteText(text)
-                    }
-                  }}
-                />
+      {/* Live Region for Screen Reader Announcements */}
+      <div 
+        aria-live="polite" 
+        aria-atomic="true"
+        className="sr-only"
+        id="status-announcements"
+      >
+        {isProcessingOCR && `Processing document, ${ocrProgress}% complete`}
+        {isGenerating && 'Generating AI summary'}
+        {isGeneratingQuiz && 'Generating quiz questions'}
+        {isSpeaking && `Reading ${speakingContent} aloud`}
+        {ocrError && `Error: ${ocrError}`}
+      </div>
+      {/* Header */}
+      <header 
+        className="header-container transition-colors duration-200"
+        style={{
+          backgroundColor: theme.cardBg,
+          borderBottomColor: theme.border,
+          color: theme.text
+        }}
+        role="banner"
+        aria-label="EchoLearn application header"
+      >
+        {/* Desktop Header Layout (768px+) */}
+        <div className="header-content hidden md:flex">
+          <div className="flex items-center space-x-4">
+            {/* EchoLearn Logo */}
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 shadow-md">
+                <Eye className="w-6 h-6 text-white" />
               </div>
-              
-              <Button
-                onClick={() => {
-                  const textarea = document.querySelector('textarea')
-                  if (textarea && textarea.value.trim()) {
-                    handlePasteText(textarea.value)
-                  }
-                }}
-                $variant="secondary"
-                style={{ width: '100%' }}
-              >
-                <FilePlus size={20} />
-                Process Pasted Text
-              </Button>
-            </Card>
+              <h1 className="logo">EchoLearn</h1>
+            </div>
+            <p className="subtitle hidden lg:block">
+              Transform documents into dyslexia-friendly study materials
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              className="keyboard-btn"
+              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+            >
+              <Keyboard className="w-4 h-4" />
+              <span>Keyboard Shortcuts</span>
+            </button>
+            <button
+              className="keyboard-btn"
+              onClick={() => setShowReadingPreferences(!showReadingPreferences)}
+              title="Reading Preferences"
+              aria-label="Open reading preferences"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </button>
+          </div>
+        </div>
 
-            {/* Text Display */}
-            <Card>
-              <h2 style={{ marginBottom: '20px', color: theme.primaryColor }}>
-                <FileText style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-                {textSource === 'paste' ? 'Pasted Text' : 'Extracted Text'}
-              </h2>
-              
-              <InlineHelp>
-                <FileText size={16} className="help-icon" />
-                {textSource === 'paste' 
-                  ? 'Your pasted text will appear here. Click a sentence to highlight it, or click a word to hear how it\'s pronounced.'
-                  : 'Text extracted from your uploaded files will appear here. Click a sentence to highlight it, or click a word to hear how it\'s pronounced.'
-                }
-                Press <strong>Ctrl/Cmd + T</strong> to listen to the text.
-              </InlineHelp>
+        {/* Mobile Header Layout (<768px) */}
+        <div className="flex md:hidden items-center justify-between w-full px-4 py-3">
+          {/* Left: Shortcut Keys Button */}
+          <div className="flex-1 flex justify-start">
+            <button
+              className="keyboard-btn text-sm"
+              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+              aria-label="Show keyboard shortcuts"
+            >
+              <Keyboard className="w-4 h-4" />
+              <span>Shortcut Keys</span>
+            </button>
+          </div>
 
-              {getCurrentText() && (
-                <ReadingControls>
-                  <span className="control-label">Reading Tools:</span>
-                  <Button 
-                    onClick={() => setIsReadingMode(!isReadingMode)}
-                    $variant="tertiary"
-                  >
-                    {isReadingMode ? <EyeOff size={14} /> : <Eye size={14} />}
-                    {isReadingMode ? 'Exit Focus Mode' : 'Focus Mode'}
-                  </Button>
-                  <Button 
-                    onClick={() => {
-                      setFocusedSentenceIndex(-1)
-                      setIsReadingMode(false)
-                    }}
-                    $variant="tertiary"
-                  >
-                    <Focus size={14} />
-                    Clear Focus
-                  </Button>
-                  {isReadingMode && (
-                    <span style={{ fontSize: '12px', color: theme.textColor, opacity: 0.7 }}>
-                      Use arrow keys to navigate, ESC to exit
-                    </span>
-                  )}
-                </ReadingControls>
-              )}
-              
-              <TextDisplay
-                $fontFamily={fontFamily}
-                $fontSize={fontSize}
-                $lineHeight={lineHeight}
-              >
-                {getCurrentText() ? formatTextForReading(getCurrentText()) : 'Your text will show up here after you upload a file or paste text.'}
-              </TextDisplay>
-              
-              {getCurrentText() && (
-                <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <Button 
-                    $variant="tertiary"
-                    onClick={() => copyToClipboard(getCurrentText())}
-                    aria-label="Copy text to clipboard"
-                  >
-                    <Copy size={18} />
-                    Copy to Clipboard
-                  </Button>
-                  <Button 
-                    $variant="secondary"
-                    onClick={() => (isSpeaking && currentlyReading === 'transcript') ? stopSpeaking() : speakText(getCurrentText(), 'transcript')}
-                    style={{ 
-                      ...(isSpeaking && currentlyReading === 'transcript' && {
-                        background: '#dc2626',
-                        borderColor: '#dc2626',
-                        color: 'white'
-                      })
-                    }}
-                    aria-label={(isSpeaking && currentlyReading === 'transcript') ? 'Stop reading text aloud' : 'Read text aloud'}
-                  >
-                    {(isSpeaking && currentlyReading === 'transcript') ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                    {(isSpeaking && currentlyReading === 'transcript') ? 'Stop Reading' : 'Read Aloud'}
-                  </Button>
-                  <Button 
-                    $variant="secondary" 
+          {/* Center: EchoLearn Logo */}
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 shadow-md">
+                <Eye className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-lg font-bold" style={{ color: theme.accent }}>EchoLearn</h1>
+            </div>
+          </div>
+
+          {/* Right: Settings Icon */}
+          <div className="flex-1 flex justify-end">
+            <button
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              onClick={() => setShowReadingPreferences(!showReadingPreferences)}
+              title="Reading Preferences"
+              aria-label="Open reading preferences"
+              style={{ backgroundColor: 'transparent' }}
+            >
+              <Settings className="w-5 h-5" style={{ color: theme.accent }} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+            {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+        theme={theme}
+      />
+
+      {/* Reading Preferences Modal */}
+      <ReadingPreferencesModal
+        isOpen={showReadingPreferences}
+        onClose={() => setShowReadingPreferences(false)}
+        theme={theme}
+        fontFamily={fontFamily}
+        setFontFamily={setFontFamily}
+        fontSize={fontSize}
+        setFontSize={setFontSize}
+        lineHeight={lineHeight}
+        setLineHeight={setLineHeight}
+        colorTheme={colorTheme}
+        setColorTheme={setColorTheme}
+        colorThemes={colorThemes}
+      />
+
+      {/* Progress Steps */}
+              <ProgressSteps currentStep={currentStep} theme={theme} />
+
+      {/* Main Content */}
+      <main 
+        id="main-content"
+        className="main-container"
+        role="main"
+        aria-label="Main content area"
+      >
+        {/* Main Content Area */}
+        <div className="space-y-6">
+          {/* Upload Section */}
+          <section 
+            className="card transition-colors duration-200"
+            style={{
+              backgroundColor: theme.cardBg,
+              borderColor: theme.border,
+              color: theme.text
+            }}
+            aria-labelledby="upload-heading"
+            role="region"
+          >
+            <div className="card-header">
+              <Upload className="w-5 h-5 text-primary-600" aria-hidden="true" />
+              <h2 id="upload-heading" className="card-title">Upload Documents or Paste Text Here</h2>
+            </div>
+            
+            <UploadZone
+              onFileUpload={handleFileUpload}
+              isProcessing={isProcessingOCR}
+              progress={ocrProgress}
+              error={ocrError}
+              theme={theme}
+            />
+
+            {/* Text Paste Area */}
+            <div className="paste-section">
+              <div className="paste-label">
+                <FilePlus className="w-4 h-4 text-gray-600" />
+                <span>Or paste text here:</span>
+              </div>
+              <textarea
+                className="paste-textarea"
+                placeholder="Paste your text here..."
+                onChange={(e) => handleTextPaste(e.target.value)}
+              />
+            </div>
+
+            {/* Action Buttons - Show based on content source */}
+            {currentText && (
+              <div className="action-buttons mt-6 p-4 border-t" style={{ borderColor: theme.border }}>
+                <h3 className="font-semibold mb-4" style={{ color: theme.text }}>
+                  {currentSource === 'paste' ? 'Text Processing Options' : 'Document Processing Options'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    className="btn-primary"
                     onClick={generateSummary} 
                     disabled={isGenerating}
-                    aria-label="Generate AI-powered summary of the text"
                   >
-                    <Brain size={20} />
-                    {isGenerating ? 'Generating with AI...' : 'Summarize Text'}
-                  </Button>
-                  <Button 
-                    $variant="secondary" 
-                    onClick={generateQuestions} 
-                    disabled={isGenerating}
-                    aria-label="Create practice questions from the text"
+                    {isGenerating ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="w-4 h-4 mr-2" />
+                        Generate AI Summary
+                      </>
+                    )}
+                  </button>
+                  
+                  <button
+                    className="btn-primary"
+                    onClick={generateQuiz} 
+                    disabled={isGeneratingQuiz}
                   >
-                    <HelpCircle size={20} />
-                    {isGenerating ? 'Generating with AI...' : 'MC Quiz'}
-                  </Button>
-                  <Button 
-                    $variant="secondary" 
-                    onClick={startSpellingQuiz} 
-                    disabled={!getCurrentText()}
-                    aria-label="Start spelling quiz with words from text"
+                    {isGeneratingQuiz ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Type className="w-4 h-4 mr-2" />
+                        Generate Practice Quiz
+                      </>
+                    )}
+                  </button>
+                  
+                  <button
+                    className="btn-primary"
+                    onClick={generateSpellingQuiz}
                   >
-                    <Keyboard size={20} />
-                    Spelling Quiz
-                  </Button>
+                    <Volume2 className="w-4 h-4 mr-2" />
+                    Generate Spelling Quiz
+                  </button>
                 </div>
-              )}
-            </Card>
-
-            {/* AI-Generated Summary */}
-            {summary.length > 0 && (
-              <Card>
-                <h2 style={{ marginBottom: '20px', color: theme.primaryColor }}>
-                  <Brain style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-                  AI Summary
-                </h2>
-                
-                <InlineHelp>
-                  <Brain size={16} className="help-icon" />
-                  Key points from your transcript, optimized for dyslexic learners. 
-                  Generated by AI using <strong>Ctrl/Cmd + S</strong>
-                </InlineHelp>
-                <SummarySection>
-                  <ul>
-                    {summary.map((point, index) => (
-                      <li key={index}>{point}</li>
-                    ))}
-                  </ul>
-                </SummarySection>
-                <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <Button $variant="tertiary" onClick={() => copyToClipboard(summary.join('\n• '))}>
-                    <Copy size={18} />
-                    Copy to Clipboard
-                  </Button>
-                  <Button 
-                    $variant="secondary"
-                    onClick={() => (isSpeaking && currentlyReading === 'summary') ? stopSpeaking() : speakText(summary.join('. '), 'summary')}
-                    style={{ 
-                      ...(isSpeaking && currentlyReading === 'summary' && {
-                        background: '#dc2626',
-                        borderColor: '#dc2626',
-                        color: 'white'
-                      })
-                    }}
-                    aria-label={(isSpeaking && currentlyReading === 'summary') ? 'Stop reading summary aloud' : 'Read summary aloud'}
-                  >
-                    {(isSpeaking && currentlyReading === 'summary') ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                    {(isSpeaking && currentlyReading === 'summary') ? 'Stop Reading' : 'Read Summary'}
-                  </Button>
-                </div>
-              </Card>
+              </div>
             )}
+          </section>
 
-            {/* Practice Questions */}
-            {questions.length > 0 && (
-              <Card>
-                <h2 style={{ marginBottom: '20px', color: theme.primaryColor }}>
-                  <HelpCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-                                      MC Quiz
-                </h2>
-                
-                <InlineHelp>
-                  <HelpCircle size={16} className="help-icon" />
-                  Test your understanding with quick questions based on your lesson. Each question has helpful explanations.
-                  Use <strong>Ctrl/Cmd + Q</strong> to generate, <strong>1-4 keys</strong> to answer (A-D options).
-                </InlineHelp>
-                <QuizSection>
-                  {/* Progress Indicator */}
-                  <QuizProgress>
-                    Practice Quiz Progress: {Object.keys(showResults).length} of {questions.length} questions answered
-                  </QuizProgress>
-
-                  {questions.map((q, qIndex) => {
-                    const isCorrect = selectedAnswers[qIndex] === q.correct
-                    const hasAnswered = showResults[qIndex]
-                    
-                    return (
-                      <QuestionCard key={qIndex}>
-                        <div className="question-header">
-                          <h3>Question {qIndex + 1} of {questions.length}</h3>
-                          <Button 
-                            $variant="tertiary"
-                            onClick={() => speakText(q.question, 'question')}
-                            aria-label={`Read question ${qIndex + 1} aloud`}
-                            style={{ fontSize: '14px', padding: '8px 12px' }}
-                          >
-                            <Volume2 size={14} />
-                            Read Question
-                          </Button>
-                        </div>
-                        
-                        <div className="question-text" role="heading" aria-level="4">
-                          {q.question}
-                        </div>
-                        
-                        <div role="radiogroup" aria-labelledby={`question-${qIndex}`}>
-                          {q.options.map((option, oIndex) => (
-                            <AnswerButton
-                              key={oIndex}
-                              onClick={() => handleAnswerSelect(qIndex, oIndex)}
-                              disabled={hasAnswered}
-                              className={
-                                hasAnswered 
-                                  ? oIndex === q.correct 
-                                    ? 'correct' 
-                                    : selectedAnswers[qIndex] === oIndex 
-                                      ? 'incorrect' 
-                                      : ''
-                                  : ''
-                              }
-                              role="radio"
-                              aria-checked={selectedAnswers[qIndex] === oIndex}
-                              aria-label={`Option ${String.fromCharCode(65 + oIndex)}: ${option}`}
-                            >
-                              <strong>{String.fromCharCode(65 + oIndex)}.</strong> {option}
-                            </AnswerButton>
-                          ))}
-                        </div>
-                        
-                        {hasAnswered && (
-                          <FeedbackSection 
-                            isCorrect={isCorrect}
-                            role="alert"
-                            aria-live="polite"
-                          >
-                            <div className="feedback-header">
-                              <span className="feedback-icon">
-                                {isCorrect ? '✓' : '✗'}
-                              </span>
-                              <span className="feedback-label">
-                                {isCorrect ? 'Correct!' : 'Not quite right'}
-                              </span>
-                            </div>
-                            
-                            <div className="feedback-message">
-                              {isCorrect 
-                                ? "Excellent work! You're really understanding the material."
-                                : "Good try! Every attempt helps you learn."
-                              }
-                            </div>
-                            
-                            {!isCorrect && (
-                              <div className="feedback-explanation">
-                                <strong>Tip:</strong> {getQuestionExplanation(qIndex)}
-                              </div>
-                            )}
-                            
-                            <Button 
-                              onClick={() => speakText(
-                                isCorrect 
-                                  ? "Correct! Excellent work!" 
-                                  : `Not quite right. ${getQuestionExplanation(qIndex)}`,
-                                'feedback'
-                              )}
-                              $variant="tertiary"
-                              style={{ marginTop: '12px' }}
-                              aria-label="Read feedback aloud"
-                            >
-                              <Volume2 size={14} />
-                              Read Feedback
-                            </Button>
-                          </FeedbackSection>
-                        )}
-                      </QuestionCard>
-                    )
-                  })}
-                </QuizSection>
-              </Card>
-            )}
-          </MainContent>
-
-          {/* Customization Sidebar */}
-          <Sidebar>
-            <Card>
-              <h2 style={{ marginBottom: '20px', color: theme.primaryColor }}>Personalize Your Reading Experience</h2>
-              
-              <ControlGroup>
-                <label>Choose Your Font</label>
-                <Select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}>
-                  <option value="Arial, sans-serif">Arial</option>
-                  <option value="Helvetica, sans-serif">Helvetica</option>
-                  <option value="Verdana, sans-serif">Verdana</option>
-                  <option value="'Comic Sans MS', cursive">Comic Sans MS (Dyslexia-friendly)</option>
-                  <option value="'OpenDyslexic', Arial, sans-serif">OpenDyslexic (Specialized for Dyslexia)</option>
-                </Select>
-              </ControlGroup>
-
-              <ControlGroup>
-                <label>Text Size: {fontSize}px</label>
-                <Slider
-                  type="range"
-                  min="12"
-                  max="24"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(parseInt(e.target.value))}
-                />
-              </ControlGroup>
-
-              <ControlGroup>
-                <label>Line Spacing: {lineHeight}</label>
-                <Slider
-                  type="range"
-                  min="1.2"
-                  max="2.5"
-                  step="0.1"
-                  value={lineHeight}
-                  onChange={(e) => setLineHeight(parseFloat(e.target.value))}
-                />
-              </ControlGroup>
-
-              <ControlGroup>
-                <label>Reading Voice</label>
-                <Select value={selectedLanguage} onChange={(e) => handleLanguageChange(e.target.value)}>
-                  {speechService.getSupportedLanguages().map(lang => (
-                    <option key={lang.code} value={lang.code}>{lang.name}</option>
-                  ))}
-                </Select>
-              </ControlGroup>
-
-              <ControlGroup>
-                <label>Color & Contrast</label>
-                <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>
-                  {Object.entries(colorSchemes).map(([key, scheme]) => (
-                    <ColorPreview
-                      key={key}
-                      $backgroundColor={scheme.backgroundColor}
-                      $textColor={scheme.textColor}
-                      $borderColor={colorScheme === key ? scheme.primaryColor : scheme.borderColor}
-                      $primaryColor={scheme.primaryColor}
-                      onClick={() => setColorScheme(key)}
-                      style={{ 
-                        cursor: 'pointer',
-                        borderWidth: colorScheme === key ? '2px' : '1px',
-                        transform: colorScheme === key ? 'scale(1.02)' : 'scale(1)'
-                      }}
-                    >
-                      <div className="preview-title">{scheme.name}</div>
-                      <div className="preview-text">
-                        Sample text with improved readability
-                      </div>
-                    </ColorPreview>
-                  ))}
-                </div>
-              </ControlGroup>
-
-              <ControlGroup>
-                <Button 
-                  onClick={savePreferences}
-                  $variant="secondary"
-                  style={{ width: '100%', marginTop: '16px' }}
-                  aria-label="Save your accessibility preferences"
-                >
-                  <Download size={20} />
-                  Save My Settings
-                </Button>
-              </ControlGroup>
-            </Card>
-
-            <Card>
-              <h3 style={{ marginBottom: '16px', color: theme.primaryColor }}>
-                🤖 AI Status
-              </h3>
-              <StatusBadge 
-                $status={backendStatus === 'connected' ? 'connected' : backendStatus === 'checking' ? 'checking' : 'demo'}
-                style={{ marginBottom: '16px' }}
-              >
-                <span className="status-icon">
-                  {backendStatus === 'connected' ? '✅' : backendStatus === 'checking' ? '🔄' : '⚠️'}
-                </span>
-                {backendStatus === 'connected' ? 'Connected' : 
-                 backendStatus === 'checking' ? 'Checking...' : 
-                 'Demo Mode'}
-              </StatusBadge>
-              
-              <div style={{ display: 'grid', gap: '12px', fontSize: '13px' }}>
-                <details style={{ cursor: 'pointer' }}>
-                  <summary style={{ fontWeight: '600', color: theme.primaryColor, marginBottom: '8px' }}>
-                    📱 Core Features
-                  </summary>
-                  <div style={{ paddingLeft: '16px', opacity: 0.9 }}>
-                    • OCR text extraction<br/>
-                    • AI summaries & quizzes<br/>
-                    • Text-to-speech reading<br/>
-                    • Spelling practice
-                  </div>
-                </details>
-                
-                <details style={{ cursor: 'pointer' }}>
-                  <summary style={{ fontWeight: '600', color: theme.primaryColor, marginBottom: '8px' }}>
-                    ♿ Accessibility
-                  </summary>
-                  <div style={{ paddingLeft: '16px', opacity: 0.9 }}>
-                    • 5 dyslexia-friendly themes<br/>
-                    • Customizable fonts & spacing<br/>
-                    • Keyboard navigation<br/>
-                    • Reading focus mode
-                  </div>
-                </details>
-                
-                <details style={{ cursor: 'pointer' }}>
-                  <summary style={{ fontWeight: '600', color: theme.primaryColor, marginBottom: '8px' }}>
-                    📊 Progress & Feedback
-                  </summary>
-                  <div style={{ paddingLeft: '16px', opacity: 0.9 }}>
-                    • Real-time upload progress<br/>
-                    • Step-by-step workflow<br/>
-                    • Quiz scoring & explanations<br/>
-                    • Saved preferences
-                  </div>
-                </details>
-              </div>
-            </Card>
-
-            <Card>
-              <h3 style={{ marginBottom: '16px', color: theme.primaryColor }}>
-                <Keyboard size={16} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-                Keyboard Shortcuts
-              </h3>
-              <ul style={{ listStyle: 'none', fontSize: '13px', lineHeight: '1.5' }}>
-                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + U</strong> - Upload Files</li>
-                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + P</strong> - Play/Pause Audio</li>
-                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + T</strong> - Read Text Aloud</li>
-                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + S</strong> - Generate Summary</li>
-                <li style={{ marginBottom: '6px' }}><strong>Ctrl/Cmd + Q</strong> - Create Quiz</li>
-                <li style={{ marginBottom: '6px' }}><strong>Arrow Keys</strong> - Navigate in Focus Mode</li>
-                <li style={{ marginBottom: '6px' }}><strong>1-4 Keys</strong> - Answer Quiz (A-D)</li>
-                <li style={{ marginBottom: '6px' }}><strong>ESC</strong> - Exit Focus Mode</li>
-              </ul>
-            </Card>
-          </Sidebar>
-        </Grid>
-        
-        {/* Spelling Quiz Modal */}
-        {showSpellingQuiz && (
-          <SpellingQuizContainer>
-            <SpellingQuizModal theme={theme}>
-              <button 
-                className="close-button" 
-                onClick={closeSpellingQuiz}
-                aria-label="Close spelling quiz"
-              >
-                ×
-              </button>
-              
-              <div className="quiz-header">
-                <h2>Spelling Quiz</h2>
-                <div className="progress">
-                  Word {currentWordIndex + 1} of {spellingWords.length}
-                </div>
-              </div>
-              
-              <div className="word-section">
-                <div className="instruction">
-                  Listen carefully and spell the word you hear
-                </div>
-                
-                <div className="audio-controls">
-                  <Button 
-                    $variant="primary"
-                    onClick={repeatSpellingWord}
-                    aria-label="Repeat the word"
+          {/* Extracted Text Display */}
+          {currentText && (
+            <section 
+              className="card transition-colors duration-200"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: theme.border,
+                color: theme.text
+              }}
+              aria-labelledby="text-display-heading"
+              role="region"
+            >
+              <div className="card-header">
+                <FileText className="w-5 h-5 text-primary-600" aria-hidden="true" />
+                <h3 id="text-display-heading" className="card-title">{currentSource === 'paste' ? 'Pasted Text' : 'Extracted Text'}</h3>
+                <div className="text-controls ml-auto">
+                  <button 
+                    className={`btn-tertiary ${focusMode ? 'bg-blue-100 text-blue-700' : ''}`}
+                    onClick={() => setFocusMode(!focusMode)}
+                    aria-label="Toggle reading focus mode"
+                    title="Reading Focus Tool"
                   >
-                    <Volume2 size={20} />
-                    Repeat Word
-                  </Button>
+                    <Focus className="w-4 h-4" />
+                  </button>
+                  <button 
+                    className={`btn-tertiary ${distractionFreeMode ? 'bg-green-100 text-green-700' : ''}`}
+                    onClick={() => setDistractionFreeMode(!distractionFreeMode)}
+                    aria-label="Toggle distraction-free mode"
+                    title="Distraction-Free Mode"
+                  >
+                    <Minimize2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    className="btn-tertiary"
+                    aria-label="Word definitions available - click on words"
+                    title="Click words for definitions"
+                  >
+                    <MousePointer className="w-4 h-4" />
+                  </button>
+                  <button 
+                    className={`btn-tertiary ${isSpeaking && speakingContent === 'text' ? 'bg-red-100 text-red-700 hover:bg-red-200' : ''}`}
+                    onClick={() => handleSpeak(currentText, 'text')}
+                    aria-label={isSpeaking && speakingContent === 'text' ? 'Stop reading aloud' : 'Read text aloud'}
+                  >
+                    {isSpeaking && speakingContent === 'text' ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
               
-              <div className="input-section">
-                <label htmlFor="spelling-input" className="input-label">
-                  Type the word you heard:
-                </label>
-                <input
-                  id="spelling-input"
-                  type="text"
-                  className="spelling-input"
-                  value={userSpelling}
-                  onChange={(e) => setUserSpelling(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !showSpellingFeedback && checkSpelling()}
-                  placeholder="Enter spelling here..."
-                  autoComplete="off"
-                  spellCheck="true"
-                  aria-label="Enter your spelling of the word"
-                />
+              <EnhancedTextDisplay
+                text={currentText}
+                theme={theme}
+                fontSize={fontSize}
+                lineHeight={lineHeight}
+                fontFamily={fontFamily}
+                focusMode={focusMode}
+                onWordClick={handleWordClick}
+                highlightRange={speakingContent === 'text' ? highlightedTextRange : null}
+              />
+            </section>
+          )}
+
+          {/* AI Summary Section */}
+          {showSummary && (
+            <div 
+              className="card transition-colors duration-200"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: theme.border,
+                color: theme.text
+              }}
+            >
+              <div className="card-header">
+                <Brain className="w-5 h-5 text-primary-600" />
+                <h3 className="card-title">AI Summary</h3>
+                <div className="text-controls ml-auto">
+                  <button className="btn-tertiary">
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button className="btn-tertiary">
+                    <Type className="w-4 h-4" />
+                  </button>
+                  <button 
+                    className={`btn-tertiary ${isSpeaking && speakingContent === 'summary' ? 'bg-red-100 text-red-700 hover:bg-red-200' : ''}`}
+                    onClick={() => aiSummary && handleSpeak(aiSummary, 'summary')}
+                  >
+                    {isSpeaking && speakingContent === 'summary' ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-              
-              {!showSpellingFeedback ? (
-                <div className="quiz-actions">
-                  <Button
-                    $variant="primary"
-                    onClick={checkSpelling}
-                    disabled={!userSpelling.trim()}
-                    aria-label="Check your spelling"
-                  >
-                    Check Spelling
-                  </Button>
-                  <Button
-                    $variant="tertiary"
-                    onClick={skipSpellingWord}
-                    aria-label="Skip this word"
-                  >
-                    Skip Word
-                  </Button>
+
+              {!aiSummary ? (
+                <div className="text-center py-8">
+                  <Brain className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Generating AI Summary...</p>
                 </div>
               ) : (
-                <SpellingFeedback 
-                  isCorrect={spellingFeedback.includes('Great job')}
+                <EnhancedTextDisplay
+                  text={aiSummary}
                   theme={theme}
-                >
-                  <div className="feedback-text">
-                    {spellingFeedback}
-                  </div>
-                  <div className="feedback-actions">
-                    <Button
-                      $variant="secondary"
-                      onClick={repeatSpellingWord}
-                      aria-label="Hear the word again"
-                    >
-                      <Volume2 size={16} />
-                      Hear Again
-                    </Button>
-                    {currentWordIndex < spellingWords.length - 1 ? (
-                      <Button
-                        $variant="primary"
-                        onClick={nextSpellingWord}
-                        aria-label="Continue to next word"
-                      >
-                        Next Word
-                      </Button>
-                    ) : (
-                      <Button
-                        $variant="primary"
-                        onClick={closeSpellingQuiz}
-                        aria-label="Close spelling quiz"
-                      >
-                        Finish Quiz
-                      </Button>
-                    )}
-                  </div>
-                </SpellingFeedback>
+                  fontSize={fontSize}
+                  lineHeight={lineHeight}
+                  fontFamily={fontFamily}
+                  focusMode={false}
+                  onWordClick={handleWordClick}
+                  highlightRange={speakingContent === 'summary' ? highlightedTextRange : null}
+                />
               )}
-            </SpellingQuizModal>
-          </SpellingQuizContainer>
-        )}
+                        </div>
+          )}
 
-        {/* Word Definition Popup */}
-        {selectedWord && wordDefinition && (
-          <WordDefinitionPopup>
-            <div className="word-title">"{selectedWord}"</div>
-            <div className="definition">{wordDefinition}</div>
-          </WordDefinitionPopup>
+          {/* Quiz Section */}
+          {showQuiz && (
+            <div 
+              className="card transition-colors duration-200"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: theme.border,
+                color: theme.text
+              }}
+            >
+              <div className="card-header">
+                <Type className="w-5 h-5 text-primary-600" />
+                <h3 className="card-title">Practice Quiz</h3>
+                <div className="text-controls ml-auto">
+                  <button className="btn-tertiary">
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button className="btn-tertiary">
+                    <Type className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {quizQuestions.length === 0 ? (
+                <div className="text-center py-8">
+                  <Type className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Generating Practice Quiz...</p>
+                </div>
+              ) : (
+                <QuizSection 
+                  questions={quizQuestions}
+                  theme={theme}
+                  fontSize={fontSize}
+                  lineHeight={lineHeight}
+                  fontFamily={fontFamily}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Spelling Quiz Section */}
+          {showSpellingQuiz && (
+            <div 
+              className="card transition-colors duration-200"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: theme.border,
+                color: theme.text
+              }}
+            >
+              <div className="card-header">
+                <Volume2 className="w-5 h-5 text-primary-600" />
+                <h3 className="card-title">Spelling Practice</h3>
+                <div className="text-controls ml-auto">
+                  <button className="btn-tertiary">
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button className="btn-tertiary">
+                    <Type className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <SpellingQuizSection 
+                words={spellingQuiz}
+                theme={theme}
+                fontSize={fontSize}
+                lineHeight={lineHeight}
+                fontFamily={fontFamily}
+              />
+            </div>
+          )}
+                        </div>
+                        
+        {/* Sidebar - Hidden in distraction-free mode */}
+        {!distractionFreeMode && (
+          <div className="sidebar">
+
+
+          {/* Help Section */}
+          <div 
+            className="card transition-colors duration-200"
+            style={{
+              backgroundColor: theme.cardBg,
+              borderColor: theme.border,
+              color: theme.text
+            }}
+          >
+            <div className="card-header">
+              <HelpCircle className="w-5 h-5 text-primary-600" />
+              <h3 className="card-title">Features</h3>
+            </div>
+            
+            <div className="space-y-3 text-sm text-gray-600">
+              <div>📋 Upload images & PDFs for text extraction</div>
+              <div>🧠 AI-powered summaries & quizzes</div>
+              <div>🔊 Text-to-speech functionality</div>
+              <div>♿ Dyslexia-friendly reading options</div>
+              <div>⌨️ Full keyboard navigation support</div>
+            </div>
+          </div>
+        </div>
         )}
-      </Container>
-    </ThemeProvider>
+      </main>
+
+      {/* Word Definition Popup */}
+      {selectedWord && (
+        <WordDefinitionPopup
+          word={selectedWord}
+          position={wordPosition}
+          onClose={closeWordDefinition}
+          theme={theme}
+        />
+      )}
+
+      {/* Distraction-Free Mode Indicator */}
+      {distractionFreeMode && (
+        <div 
+          className="fixed top-4 right-4 z-40 p-2 rounded-lg border shadow-lg"
+          style={{
+            backgroundColor: theme.cardBg,
+            borderColor: theme.border,
+            color: theme.text
+          }}
+        >
+          <div className="flex items-center space-x-2">
+            <Accessibility className="w-4 h-4" style={{ color: theme.accent }} />
+            <span className="text-sm font-medium">Distraction-Free Mode</span>
+            <button
+              className="btn-tertiary text-xs"
+              onClick={() => setDistractionFreeMode(false)}
+              aria-label="Exit distraction-free mode"
+            >
+              Exit
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

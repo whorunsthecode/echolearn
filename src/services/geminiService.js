@@ -4,6 +4,24 @@ class GeminiService {
   constructor() {
     this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
     console.log('🔧 Gemini Service initialized with base URL:', this.baseURL)
+    this.checkApiStatus()
+  }
+
+  async checkApiStatus() {
+    try {
+      const response = await fetch(`${this.baseURL}/ai/debug-status`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.apiKeyConfigured) {
+          console.log('✅ Gemini API Key is configured - AI features will work')
+        } else {
+          console.warn('⚠️ Gemini API Key not configured - will use demo data')
+          console.info('ℹ️ To enable AI features, get a free API key from: https://makersuite.google.com/app/apikey')
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not check API status - backend may not be running')
+    }
   }
 
   async generateSummary(transcript) {

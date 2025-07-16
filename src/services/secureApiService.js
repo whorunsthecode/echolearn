@@ -1,7 +1,8 @@
 // Secure API Service - Handles authentication and secure API calls
 class SecureApiService {
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
+    this.baseURL = import.meta.env.VITE_API_URL || '
+  http://localhost:5001/api'
     this.token = localStorage.getItem('authToken')
     this.user = null
     
